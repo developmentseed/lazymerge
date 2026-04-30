@@ -1,0 +1,31 @@
+[project]
+name = "lazymerge"
+version = "0.1.0"
+description = "Lazily merge geospatial Zarr arrays using Cubed"
+readme = "README.md"
+authors = [{ name = "Sean Harkins", email = "sean@developmentseed.org" }]
+requires-python = ">=3.12"
+dependencies = [
+    "zarr>=3.0",
+    "cubed",
+    "pyproj",
+    "numpy",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "ruff",
+    "mypy",
+]
+
+[tool.ruff]
+line-length = 100
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+
+[[tool.mypy.overrides]]
+module = "cubed.*"
+ignore_missing_imports = true
