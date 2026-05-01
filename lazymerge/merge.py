@@ -19,7 +19,6 @@ def _merge_block(
     store: Store,
     chunk_size: tuple[int, int],
     resampling: str,
-    aggregation: str,
 ) -> np.ndarray:
     target_crs = target_proj.code
     if target_crs is None:
@@ -47,7 +46,12 @@ def _merge_block(
     if not sources:
         return output
 
+    unfilled = int(np.count_nonzero(np.isnan(output)))
+
     for source_entry in sources:
+        if unfilled == 0:
+            break
+
         # Pass 2: find intersecting source chunks
         src_chunks = source_index.find_intersecting_chunks(source_entry, cb, target_crs)
         if not src_chunks:
@@ -60,6 +64,9 @@ def _merge_block(
             continue
 
         for _, (src_row, src_col) in src_chunks:
+            if unfilled == 0:
+                break
+
             # Read source chunk data
             sr_start = src_row * source_entry.chunk_shape[0]
             sr_end = min(sr_start + source_entry.chunk_shape[0], source_entry.spatial_attrs.shape[0])
@@ -83,12 +90,9 @@ def _merge_block(
                 resampling=resampling,
             )
 
-            if aggregation == "first":
-                mask = np.isnan(output) & ~np.isnan(warped)
-                output[mask] = warped[mask]
-            elif aggregation == "last":
-                mask = ~np.isnan(warped)
-                output[mask] = warped[mask]
+            mask = np.isnan(output) & ~np.isnan(warped)
+            output[mask] = warped[mask]
+            unfilled -= int(np.count_nonzero(mask))
 
     return output
 
@@ -100,7 +104,6 @@ def merge(
     target_proj: ProjAttrs,
     store: Store,
     resampling: str = "nearest",
-    aggregation: str = "first",
 ) -> tuple[cubed.Array, SpatialAttrs, ProjAttrs]:
     chunk_size = target.chunksize
 
@@ -115,7 +118,6 @@ def merge(
         store=store,
         chunk_size=chunk_size,
         resampling=resampling,
-        aggregation=aggregation,
     )
 
     return result, target_spatial, target_proj

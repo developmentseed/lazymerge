@@ -141,6 +141,13 @@ def main() -> None:
     print(f"   Output bbox: {out_spatial.bbox}")
     print(f"   Output transform: {out_spatial.transform}")
 
+    # Show zarr_conventions metadata written by zarr-cm
+    conventions = out_arr.attrs.get("zarr_conventions", [])
+    if conventions:
+        print(f"   zarr_conventions: {len(conventions)} registered")
+        for conv in conventions:
+            print(f"     - {conv['name']}: {conv['spec_url']}")
+
     # Spot-check: pixel at (0, 0) is top-left of target = (500000, 6000000) in UTM 18N
     # This should be in tile_c (fill=300, EPSG:32618)
     val_top_left = data[0, 0]

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import Any
 
 import zarr
+from zarr_cm import geo_proj, spatial
 
 
 @dataclass(frozen=True)
@@ -27,39 +28,46 @@ class ProjAttrs:
 
 
 def write_spatial(node: zarr.Group | zarr.Array, attrs: SpatialAttrs) -> None:  # type: ignore[type-arg]
-    node.attrs["spatial:dimensions"] = attrs.dimensions
-    node.attrs["spatial:transform"] = list(attrs.transform)
-    node.attrs["spatial:bbox"] = list(attrs.bbox)
-    node.attrs["spatial:shape"] = list(attrs.shape)
-    node.attrs["spatial:registration"] = attrs.registration
+    data = spatial.create(
+        dimensions=attrs.dimensions,
+        bbox=list(attrs.bbox),
+        transform=list(attrs.transform),
+        shape=list(attrs.shape),
+        registration=attrs.registration,
+    )
+    existing = dict(node.attrs)
+    updated = spatial.insert(existing, data, overwrite=True)
+    node.attrs.update(updated)
 
 
 def write_proj(node: zarr.Group | zarr.Array, attrs: ProjAttrs) -> None:  # type: ignore[type-arg]
-    if attrs.code is not None:
-        node.attrs["proj:code"] = attrs.code
-    if attrs.wkt2 is not None:
-        node.attrs["proj:wkt2"] = attrs.wkt2
-    if attrs.projjson is not None:
-        node.attrs["proj:projjson"] = attrs.projjson
+    data = geo_proj.create(
+        code=attrs.code,
+        wkt2=attrs.wkt2,
+        projjson=attrs.projjson,
+    )
+    existing = dict(node.attrs)
+    updated = geo_proj.insert(existing, data, overwrite=True)
+    node.attrs.update(updated)
 
 
 def read_spatial(node: zarr.Group | zarr.Array) -> SpatialAttrs:  # type: ignore[type-arg]
-    a = node.attrs
+    _, data = spatial.extract(dict(node.attrs))
     return SpatialAttrs(
-        dimensions=cast(list[str], a["spatial:dimensions"]),
-        transform=tuple(cast(list[float], a["spatial:transform"])),
-        bbox=tuple(cast(list[float], a["spatial:bbox"])),
-        shape=tuple(cast(list[int], a["spatial:shape"])),
-        registration=cast(str, a.get("spatial:registration", "pixel")),
+        dimensions=data["spatial:dimensions"],
+        transform=tuple(data["spatial:transform"]),
+        bbox=tuple(data["spatial:bbox"]),
+        shape=tuple(data["spatial:shape"]),
+        registration=data.get("spatial:registration", "pixel"),
     )
 
 
 def read_proj(node: zarr.Group | zarr.Array) -> ProjAttrs:  # type: ignore[type-arg]
-    a = node.attrs
+    _, data = geo_proj.extract(dict(node.attrs))
     return ProjAttrs(
-        code=cast(str | None, a.get("proj:code")),
-        wkt2=cast(str | None, a.get("proj:wkt2")),
-        projjson=cast(dict[str, Any] | None, a.get("proj:projjson")),
+        code=data.get("proj:code"),
+        wkt2=data.get("proj:wkt2"),
+        projjson=data.get("proj:projjson"),
     )
 
 

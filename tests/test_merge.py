@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 import numpy as np
 import zarr
 
@@ -5,6 +7,7 @@ from lazymerge.conventions import ProjAttrs, SpatialAttrs, write_proj, write_spa
 from lazymerge.merge import merge
 from lazymerge.sources import scan_store
 from lazymerge.target import create_target
+from lazymerge.warp import warp_chunk as real_warp_chunk
 
 
 def _make_same_crs_store():
@@ -153,6 +156,67 @@ def test_merge_mixed_crs():
     unique_vals = np.unique(data[~np.isnan(data)])
     assert 1.0 in unique_vals
     assert 2.0 in unique_vals
+
+
+def _make_overlapping_store():
+    """Two source arrays that fully overlap the same extent, filled with different values."""
+    store = zarr.storage.MemoryStore()
+    root = zarr.open_group(store, mode="w")
+
+    for name, fill in [("source_a", 1.0), ("source_b", 2.0)]:
+        arr = root.create_array(name, shape=(100, 100), dtype="f4", chunks=(100, 100))
+        arr[:] = fill
+        write_spatial(
+            arr,
+            SpatialAttrs(
+                dimensions=["y", "x"],
+                transform=(10.0, 0.0, 500000.0, 0.0, -10.0, 6000000.0),
+                bbox=(500000.0, 5999000.0, 501000.0, 6000000.0),
+                shape=(100, 100),
+            ),
+        )
+        write_proj(arr, ProjAttrs(code="EPSG:32618"))
+
+    return store, root
+
+
+def test_merge_early_stop():
+    """With fully overlapping sources, the second source should be skipped
+    once the first fills every pixel."""
+    store, root = _make_overlapping_store()
+    index = scan_store(root)
+
+    target, spatial, proj = create_target(
+        crs="EPSG:32618",
+        bbox=(500000.0, 5999000.0, 501000.0, 6000000.0),
+        resolution=10.0,
+        chunk_size=(100, 100),
+    )
+
+    warp_call_count = 0
+    original_warp = real_warp_chunk
+
+    def counting_warp(*args, **kwargs):
+        nonlocal warp_call_count
+        warp_call_count += 1
+        return original_warp(*args, **kwargs)
+
+    with patch("lazymerge.merge.warp_chunk", side_effect=counting_warp):
+        result_arr, _, _ = merge(
+            source_index=index,
+            target=target,
+            target_spatial=spatial,
+            target_proj=proj,
+            store=store,
+        )
+        data = result_arr.compute()
+
+    # Only the first source's chunk should have been warped; second skipped
+    assert warp_call_count == 1
+    # All pixels filled by whichever source came first
+    unique = np.unique(data)
+    assert len(unique) == 1
+    assert unique[0] in (1.0, 2.0)
 
 
 def test_merge_no_sources():
