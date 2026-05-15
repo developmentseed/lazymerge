@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import math
+from typing import Any
 
 import cubed
 import zarr
-from zarr.abc.store import Store
 
 from lazymerge.conventions import ProjAttrs, SpatialAttrs, write_proj, write_spatial
 
@@ -43,7 +43,7 @@ def to_zarr(
     array: cubed.Array,
     spatial: SpatialAttrs,
     proj: ProjAttrs,
-    store: str | Store,
+    store: Any,
     path: str | None = None,
 ) -> None:
     result = array.compute()

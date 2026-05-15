@@ -233,3 +233,42 @@ def test_find_intersecting_chunks_mixed_crs_no_overlap():
         target_crs="EPSG:32618",
     )
     assert len(results) == 0
+
+
+from lazymerge.sources import select_overview
+from lazymerge.conventions import OverviewLevel
+
+
+def test_select_overview_no_overviews():
+    result = select_overview(overviews=[], target_res=20.0, native_res=10.0)
+    assert result is None
+
+
+def test_select_overview_target_finer_than_native():
+    overviews = [
+        OverviewLevel(path="1", scale=(2.0, 2.0), resolution=20.0),
+    ]
+    result = select_overview(overviews=overviews, target_res=5.0, native_res=10.0)
+    assert result is None
+
+
+def test_select_overview_picks_coarsest_within_target():
+    overviews = [
+        OverviewLevel(path="1", scale=(2.0, 2.0), resolution=20.0),
+        OverviewLevel(path="2", scale=(4.0, 4.0), resolution=40.0),
+        OverviewLevel(path="3", scale=(8.0, 8.0), resolution=80.0),
+    ]
+    # Target is 50m — should pick level 2 (40m), not level 3 (80m)
+    result = select_overview(overviews=overviews, target_res=50.0, native_res=10.0)
+    assert result is not None
+    assert result.path == "2"
+    assert result.resolution == 40.0
+
+
+def test_select_overview_target_between_native_and_finest():
+    overviews = [
+        OverviewLevel(path="1", scale=(2.0, 2.0), resolution=20.0),
+    ]
+    # Target is 15m, native is 10m, finest overview is 20m — fall back to full res
+    result = select_overview(overviews=overviews, target_res=15.0, native_res=10.0)
+    assert result is None

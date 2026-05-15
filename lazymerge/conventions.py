@@ -27,6 +27,13 @@ class ProjAttrs:
             raise ValueError("ProjAttrs requires at least one of: code, wkt2, projjson")
 
 
+@dataclass(frozen=True)
+class OverviewLevel:
+    path: str
+    scale: tuple[float, float]
+    resolution: float
+
+
 def write_spatial(node: zarr.Group | zarr.Array, attrs: SpatialAttrs) -> None:  # type: ignore[type-arg]
     data = spatial.create(
         dimensions=attrs.dimensions,
@@ -69,6 +76,49 @@ def read_proj(node: zarr.Group | zarr.Array) -> ProjAttrs:  # type: ignore[type-
         wkt2=data.get("proj:wkt2"),
         projjson=data.get("proj:projjson"),
     )
+
+
+def read_multiscales(group: zarr.Group) -> list[OverviewLevel] | None:  # type: ignore[type-arg]
+    """Parse the zarr multiscales convention from a group.
+
+    Returns overview levels (excluding the base level) ordered finest to
+    coarsest, or None if no multiscales attribute exists.
+
+    Resolution is computed from the base level's spatial:transform and
+    the cumulative scale factors.
+    """
+    attrs = dict(group.attrs)
+    if "multiscales" not in attrs:
+        return None
+
+    layout = attrs["multiscales"]["layout"]
+    if len(layout) <= 1:
+        return None
+
+    # Read base resolution from the first layout entry's array
+    base_path = layout[0]["asset"]
+    base_array = group[base_path]
+    base_spatial = read_spatial(base_array)
+    native_res = abs(base_spatial.transform[0])
+
+    overviews: list[OverviewLevel] = []
+    cumulative_scale_y = 1.0
+    cumulative_scale_x = 1.0
+
+    for level in layout[1:]:
+        scale = level["transform"]["scale"]
+        cumulative_scale_y *= scale[0]
+        cumulative_scale_x *= scale[1]
+        resolution = native_res * cumulative_scale_x
+        overviews.append(
+            OverviewLevel(
+                path=level["asset"],
+                scale=(cumulative_scale_y, cumulative_scale_x),
+                resolution=resolution,
+            )
+        )
+
+    return overviews
 
 
 def chunk_bbox(

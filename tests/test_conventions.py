@@ -1,9 +1,11 @@
 import zarr
 
 from lazymerge.conventions import (
+    OverviewLevel,
     ProjAttrs,
     SpatialAttrs,
     chunk_bbox,
+    read_multiscales,
     read_proj,
     read_spatial,
     write_proj,
@@ -85,3 +87,75 @@ def test_chunk_bbox_offset():
     )
     result = chunk_bbox(sa, chunk_coords=(1, 2), chunk_shape=(256, 256))
     assert result == (505120.0, 5994880.0, 507680.0, 5997440.0)
+
+
+def test_overview_level_construction():
+    ol = OverviewLevel(path="1", scale=(2.0, 2.0), resolution=20.0)
+    assert ol.path == "1"
+    assert ol.scale == (2.0, 2.0)
+    assert ol.resolution == 20.0
+
+
+def test_read_multiscales_with_overviews():
+    """A group with multiscales attr should return overview levels ordered finest to coarsest."""
+    store = zarr.storage.MemoryStore()
+    root = zarr.open_group(store, mode="w")
+    band_group = root.create_group("red")
+
+    # Create base array with spatial attrs (10m resolution)
+    base = band_group.create_array("0", shape=(1000, 1000), dtype="f4", chunks=(256, 256))
+    write_spatial(
+        base,
+        SpatialAttrs(
+            dimensions=["y", "x"],
+            transform=(10.0, 0.0, 500000.0, 0.0, -10.0, 6000000.0),
+            bbox=(500000.0, 5990000.0, 510000.0, 6000000.0),
+            shape=(1000, 1000),
+        ),
+    )
+
+    # Create overview arrays
+    band_group.create_array("1", shape=(500, 500), dtype="f4", chunks=(256, 256))
+    band_group.create_array("2", shape=(250, 250), dtype="f4", chunks=(256, 256))
+
+    # Set multiscales attr on the band group
+    band_group.attrs["multiscales"] = {
+        "layout": [
+            {"asset": "0", "transform": {"scale": [1.0, 1.0], "translation": [0.0, 0.0]}},
+            {
+                "asset": "1",
+                "derived_from": "0",
+                "transform": {"scale": [2.0, 2.0], "translation": [0.5, 0.5]},
+            },
+            {
+                "asset": "2",
+                "derived_from": "1",
+                "transform": {"scale": [2.0, 2.0], "translation": [0.5, 0.5]},
+            },
+        ]
+    }
+
+    overviews = read_multiscales(band_group)
+    assert overviews is not None
+    assert len(overviews) == 2  # excludes the base level
+
+    # Level 1: 2x scale from base → 20m resolution
+    assert overviews[0].path == "1"
+    assert overviews[0].scale == (2.0, 2.0)
+    assert overviews[0].resolution == 20.0
+
+    # Level 2: 2x scale from level 1 → 4x cumulative → 40m resolution
+    assert overviews[1].path == "2"
+    assert overviews[1].scale == (4.0, 4.0)
+    assert overviews[1].resolution == 40.0
+
+
+def test_read_multiscales_no_attr():
+    """A group without multiscales attr should return None."""
+    store = zarr.storage.MemoryStore()
+    root = zarr.open_group(store, mode="w")
+    band_group = root.create_group("red")
+    band_group.create_array("data", shape=(100, 100), dtype="f4", chunks=(50, 50))
+
+    result = read_multiscales(band_group)
+    assert result is None

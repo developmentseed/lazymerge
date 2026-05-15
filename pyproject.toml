@@ -11,6 +11,9 @@ dependencies = [
     "cubed",
     "pyproj",
     "numpy",
+    "obstore",
+    "zarr-datafusion-search",
+    "geodatafusion",
 ]
 
 [project.optional-dependencies]

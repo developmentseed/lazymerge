@@ -241,3 +241,187 @@ def test_merge_no_sources():
 
     data = result_arr.compute()
     assert np.all(np.isnan(data))
+
+
+def _make_multiscale_store():
+    """Create a store with grouped sources containing band groups and multiscale overviews.
+
+    Structure:
+      scene_a/
+        red/
+          multiscales attr
+          0/  (100x100 at 10m, filled with 1.0)
+          1/  (50x50 at 20m, filled with 10.0)
+      scene_b/
+        red/
+          multiscales attr
+          0/  (100x100 at 10m, filled with 2.0)
+          1/  (50x50 at 20m, filled with 20.0)
+    """
+    store = zarr.storage.MemoryStore()
+    root = zarr.open_group(store, mode="w")
+
+    for name, base_fill, ovr_fill, x_origin in [
+        ("scene_a", 1.0, 10.0, 500000.0),
+        ("scene_b", 2.0, 20.0, 501000.0),
+    ]:
+        scene = root.create_group(name)
+        band = scene.create_group("red")
+
+        # Base array (10m resolution)
+        base = band.create_array("0", shape=(100, 100), dtype="f4", chunks=(50, 50))
+        base[:] = base_fill
+        write_spatial(
+            base,
+            SpatialAttrs(
+                dimensions=["y", "x"],
+                transform=(10.0, 0.0, x_origin, 0.0, -10.0, 6000000.0),
+                bbox=(x_origin, 5999000.0, x_origin + 1000.0, 6000000.0),
+                shape=(100, 100),
+            ),
+        )
+        write_proj(base, ProjAttrs(code="EPSG:32618"))
+
+        # Overview array (20m resolution)
+        ovr = band.create_array("1", shape=(50, 50), dtype="f4", chunks=(50, 50))
+        ovr[:] = ovr_fill
+        write_spatial(
+            ovr,
+            SpatialAttrs(
+                dimensions=["y", "x"],
+                transform=(20.0, 0.0, x_origin, 0.0, -20.0, 6000000.0),
+                bbox=(x_origin, 5999000.0, x_origin + 1000.0, 6000000.0),
+                shape=(50, 50),
+            ),
+        )
+        write_proj(ovr, ProjAttrs(code="EPSG:32618"))
+
+        # multiscales attr on band group
+        band.attrs["multiscales"] = {
+            "layout": [
+                {"asset": "0", "transform": {"scale": [1.0, 1.0], "translation": [0.0, 0.0]}},
+                {
+                    "asset": "1",
+                    "derived_from": "0",
+                    "transform": {"scale": [2.0, 2.0], "translation": [0.5, 0.5]},
+                },
+            ]
+        }
+
+    return store, root
+
+
+def test_merge_with_band_uses_base_resolution():
+    """When target res matches base (10m), merge should read from base arrays (level 0)."""
+    store, root = _make_multiscale_store()
+
+    from lazymerge.sources import SourceEntry, ScanIndex
+
+    entries = []
+    for name, x_origin in [("scene_a", 500000.0), ("scene_b", 501000.0)]:
+        entries.append(SourceEntry(
+            path=name,
+            spatial_attrs=SpatialAttrs(
+                dimensions=["y", "x"],
+                transform=(10.0, 0.0, x_origin, 0.0, -10.0, 6000000.0),
+                bbox=(x_origin, 5999000.0, x_origin + 1000.0, 6000000.0),
+                shape=(100, 100),
+            ),
+            proj_attrs=ProjAttrs(code="EPSG:32618"),
+            chunk_shape=(50, 50),
+        ))
+    index = ScanIndex(entries)
+
+    target, spatial, proj = create_target(
+        crs="EPSG:32618",
+        bbox=(500000.0, 5999000.0, 502000.0, 6000000.0),
+        resolution=10.0,
+        chunk_size=(50, 50),
+    )
+
+    result_arr, _, _ = merge(
+        source_index=index,
+        target=target,
+        target_spatial=spatial,
+        target_proj=proj,
+        store=store,
+        band="red",
+    )
+
+    data = result_arr.compute()
+    assert data.shape == (100, 200)
+    # Should read from base (level 0): 1.0 and 2.0, NOT overview values 10.0 / 20.0
+    np.testing.assert_array_equal(data[:, :100], 1.0)
+    np.testing.assert_array_equal(data[:, 100:], 2.0)
+
+
+def test_merge_with_band_selects_overview():
+    """When target res is coarser than base, merge should select the appropriate overview."""
+    store, root = _make_multiscale_store()
+
+    from lazymerge.sources import SourceEntry, ScanIndex
+
+    entries = []
+    for name, x_origin in [("scene_a", 500000.0), ("scene_b", 501000.0)]:
+        entries.append(SourceEntry(
+            path=name,
+            spatial_attrs=SpatialAttrs(
+                dimensions=["y", "x"],
+                transform=(10.0, 0.0, x_origin, 0.0, -10.0, 6000000.0),
+                bbox=(x_origin, 5999000.0, x_origin + 1000.0, 6000000.0),
+                shape=(100, 100),
+            ),
+            proj_attrs=ProjAttrs(code="EPSG:32618"),
+            chunk_shape=(50, 50),
+        ))
+    index = ScanIndex(entries)
+
+    # Target at 20m resolution — should trigger overview selection (level 1)
+    target, spatial, proj = create_target(
+        crs="EPSG:32618",
+        bbox=(500000.0, 5999000.0, 502000.0, 6000000.0),
+        resolution=20.0,
+        chunk_size=(25, 25),
+    )
+
+    result_arr, _, _ = merge(
+        source_index=index,
+        target=target,
+        target_spatial=spatial,
+        target_proj=proj,
+        store=store,
+        band="red",
+    )
+
+    data = result_arr.compute()
+    assert data.shape == (50, 100)
+    # Should read from overview (level 1): 10.0 and 20.0, NOT base values 1.0 / 2.0
+    np.testing.assert_array_equal(data[:, :50], 10.0)
+    np.testing.assert_array_equal(data[:, 50:], 20.0)
+
+
+def test_merge_band_none_preserves_behavior():
+    """Passing band=None explicitly should work identically to omitting it."""
+    store, root = _make_same_crs_store()
+    index = scan_store(root)
+
+    target, spatial, proj = create_target(
+        crs="EPSG:32618",
+        bbox=(500000.0, 5999000.0, 502000.0, 6000000.0),
+        resolution=10.0,
+        chunk_size=(50, 50),
+    )
+
+    result_arr, _, _ = merge(
+        source_index=index,
+        target=target,
+        target_spatial=spatial,
+        target_proj=proj,
+        store=store,
+        band=None,
+    )
+
+    data = result_arr.compute()
+    assert data.shape == (100, 200)
+    np.testing.assert_array_equal(data[:, :100], 1.0)
+    np.testing.assert_array_equal(data[:, 100:], 2.0)
