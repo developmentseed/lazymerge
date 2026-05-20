@@ -78,14 +78,20 @@ def read_proj(node: zarr.Group | zarr.Array) -> ProjAttrs:  # type: ignore[type-
     )
 
 
-def read_multiscales(group: zarr.Group) -> list[OverviewLevel] | None:  # type: ignore[type-arg]
+def read_multiscales(
+    group: zarr.Group,  # type: ignore[type-arg]
+    native_res: float | None = None,
+) -> list[OverviewLevel] | None:
     """Parse the zarr multiscales convention from a group.
 
     Returns overview levels (excluding the base level) ordered finest to
     coarsest, or None if no multiscales attribute exists.
 
-    Resolution is computed from the base level's spatial:transform and
-    the cumulative scale factors.
+    Args:
+        group: Zarr group that has the multiscales attribute.
+        native_res: Base-level pixel resolution. If not provided, it is
+            read from the base array referenced in the layout (which must
+            be a direct child of *group*).
     """
     attrs = dict(group.attrs)
     if "multiscales" not in attrs:
@@ -95,11 +101,15 @@ def read_multiscales(group: zarr.Group) -> list[OverviewLevel] | None:  # type: 
     if len(layout) <= 1:
         return None
 
-    # Read base resolution from the first layout entry's array
-    base_path = layout[0]["asset"]
-    base_array = group[base_path]
-    base_spatial = read_spatial(base_array)
-    native_res = abs(base_spatial.transform[0])
+    if native_res is None:
+        # Read base resolution from the first layout entry's array
+        base_path = layout[0]["asset"]
+        try:
+            base_array = group[base_path]
+            base_spatial = read_spatial(base_array)
+            native_res = abs(base_spatial.transform[0])
+        except KeyError:
+            return None
 
     overviews: list[OverviewLevel] = []
     cumulative_scale_y = 1.0

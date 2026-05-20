@@ -13,7 +13,7 @@ from lazymerge.conventions import (
 )
 from lazymerge.merge import merge
 from lazymerge.sources import scan_store
-from lazymerge.target import create_target, to_zarr
+from lazymerge.target import to_zarr
 
 
 def make_synthetic_store() -> tuple[zarr.storage.MemoryStore, zarr.Group]:
@@ -95,26 +95,15 @@ def main() -> None:
     for entry in index.entries:
         print(f"   - {entry.path}: bbox={entry.spatial_attrs.bbox}, crs={entry.proj_attrs.code}")
 
-    # Step 3: Create target array in UTM 18N spanning all sources
-    print("\n3. Creating target array...")
-    target, spatial, proj = create_target(
+    # Step 3: Merge (UTM 17N tiles will be reprojected into UTM 18N)
+    print("\n3. Creating lazy merge...")
+    result_arr, result_spatial, result_proj = merge(
+        store=store,
         crs="EPSG:32618",
         bbox=(500000.0, 5990000.0, 508000.0, 6000000.0),
         resolution=10.0,
         chunk_size=(256, 256),
-    )
-    print(f"   Target shape: {target.shape}")
-    print(f"   Target chunks: {target.chunksize}")
-    print(f"   Target CRS: {proj.code}")
-
-    # Step 4: Merge (UTM 17N tiles will be reprojected into UTM 18N)
-    print("\n4. Creating lazy merge...")
-    result_arr, result_spatial, result_proj = merge(
         source_index=index,
-        target=target,
-        target_spatial=spatial,
-        target_proj=proj,
-        store=store,
     )
     print(f"   Result shape: {result_arr.shape}")
 

@@ -12,7 +12,7 @@ dependencies = [
     "pyproj",
     "numpy",
     "obstore",
-    "zarr-datafusion-search",
+    "zarr-datafusion-search>=0.1.2",
     "geodatafusion",
 ]
 

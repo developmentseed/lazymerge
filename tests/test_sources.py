@@ -82,35 +82,6 @@ def test_find_intersecting_sources_none():
     assert len(results) == 0
 
 
-def test_find_intersecting_chunks_subset():
-    """Only chunks overlapping the target chunk bbox should be returned."""
-    store, root = _make_source_store()
-    index = scan_store(root)
-    source_a = [e for e in index.entries if e.path == "source_a"][0]
-
-    results = index.find_intersecting_chunks(
-        source=source_a,
-        target_chunk_bbox=(500000.0, 5999000.0, 500500.0, 6000000.0),
-        target_crs="EPSG:32618",
-    )
-    col_indices = {c[1] for _, c in results}
-    assert col_indices == {0}
-    assert len(results) > 0
-
-
-def test_find_intersecting_chunks_no_overlap():
-    """Target chunk bbox outside source should return empty list."""
-    store, root = _make_source_store()
-    index = scan_store(root)
-    source_a = [e for e in index.entries if e.path == "source_a"][0]
-
-    results = index.find_intersecting_chunks(
-        source=source_a,
-        target_chunk_bbox=(600000.0, 5999000.0, 601000.0, 6000000.0),
-        target_crs="EPSG:32618",
-    )
-    assert len(results) == 0
-
 
 # --- Mixed CRS tests ---
 
@@ -202,37 +173,6 @@ def test_find_intersecting_sources_mixed_crs_none():
     )
     assert len(results) == 0
 
-
-def test_find_intersecting_chunks_mixed_crs():
-    """find_intersecting_chunks should work when source and target are in different CRS."""
-    store, root = _make_mixed_crs_store()
-    index = scan_store(root)
-    source_b = [e for e in index.entries if e.path == "source_b"][0]
-
-    # Query with a target chunk bbox in UTM 18N that overlaps source_b
-    results = index.find_intersecting_chunks(
-        source=source_b,
-        target_chunk_bbox=(501000.0, 5999000.0, 502000.0, 6000000.0),
-        target_crs="EPSG:32618",
-    )
-    # Should find at least some chunks from the UTM 17N source
-    assert len(results) > 0
-    # All results should reference source_b
-    assert all(path == "source_b" for path, _ in results)
-
-
-def test_find_intersecting_chunks_mixed_crs_no_overlap():
-    """A target chunk bbox that doesn't overlap the UTM 17N source should return nothing."""
-    store, root = _make_mixed_crs_store()
-    index = scan_store(root)
-    source_b = [e for e in index.entries if e.path == "source_b"][0]
-
-    results = index.find_intersecting_chunks(
-        source=source_b,
-        target_chunk_bbox=(499000.0, 5999000.0, 500000.0, 6000000.0),
-        target_crs="EPSG:32618",
-    )
-    assert len(results) == 0
 
 
 from lazymerge.sources import select_overview

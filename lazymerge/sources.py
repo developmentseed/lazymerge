@@ -10,7 +10,6 @@ from lazymerge.conventions import (
     OverviewLevel,
     ProjAttrs,
     SpatialAttrs,
-    chunk_bbox,
     read_proj,
     read_spatial,
 )
@@ -99,35 +98,6 @@ class ScanIndex:
                 results.append(entry)
         return results
 
-    def find_intersecting_chunks(
-        self,
-        source: SourceEntry,
-        target_chunk_bbox: Bbox,
-        target_crs: str,
-    ) -> list[tuple[str, tuple[int, int]]]:
-        return find_intersecting_chunks(source, target_chunk_bbox, target_crs)
-
-
-def find_intersecting_chunks(
-    source: SourceEntry,
-    target_chunk_bbox: Bbox,
-    target_crs: str,
-) -> list[tuple[str, tuple[int, int]]]:
-    """Find source chunks that intersect a target chunk bbox."""
-    src_crs = source.proj_attrs.code or "EPSG:4326"
-    src_bbox = _reproject_bbox(target_chunk_bbox, target_crs, src_crs)
-
-    sa = source.spatial_attrs
-    n_row_chunks = -(-sa.shape[0] // source.chunk_shape[0])  # ceiling division
-    n_col_chunks = -(-sa.shape[1] // source.chunk_shape[1])
-
-    results: list[tuple[str, tuple[int, int]]] = []
-    for ri in range(n_row_chunks):
-        for ci in range(n_col_chunks):
-            cb = chunk_bbox(sa, (ri, ci), source.chunk_shape)
-            if _bboxes_intersect(cb, src_bbox):
-                results.append((source.path, (ri, ci)))
-    return results
 
 
 def scan_store(root: zarr.Group) -> ScanIndex:
@@ -151,6 +121,7 @@ def scan_store(root: zarr.Group) -> ScanIndex:
 def query_datafusion_sources(
     store: Any,
     bbox_4326: tuple[float, float, float, float],
+    sortby: str | None = None,
 ) -> list[SourceEntry]:
     """Query the /meta group via DataFusion for sources intersecting bbox_4326.
 
@@ -158,9 +129,12 @@ def query_datafusion_sources(
     whose bbox (stored in EPSG:4326) intersects the query bbox are returned.
 
     Args:
-        store: An obstore-compatible object store (e.g. LocalStore, S3Store)
-            pointing to the root of the zarr store.
+        store: An obstore-compatible object store (e.g. LocalStore, S3Store),
+            an Icechunk Session, or a zarr Store backed by Icechunk.
         bbox_4326: Query bounding box in EPSG:4326 (xmin, ymin, xmax, ymax).
+        sortby: Optional column name to sort results by (e.g. a datetime field).
+            Controls the order in which sources are composited — earlier entries
+            take priority for filling NaN pixels.
 
     Returns:
         List of SourceEntry objects for matching sources. chunk_shape is set
@@ -172,7 +146,17 @@ def query_datafusion_sources(
     from zarr_datafusion_search import ZarrTable
 
     async def _query() -> list[SourceEntry]:
-        zarr_table = await ZarrTable.from_obstore(store, "/meta")
+        # Detect Icechunk stores and use the appropriate constructor
+        try:
+            from icechunk import IcechunkStore
+            if isinstance(store, IcechunkStore):
+                zarr_table = await ZarrTable.from_icechunk(
+                    session=store.session, group_path="/meta"
+                )
+            else:
+                zarr_table = await ZarrTable.from_obstore(store, "/meta")
+        except ImportError:
+            zarr_table = await ZarrTable.from_obstore(store, "/meta")
 
         ctx = SessionContext()
         register_all(ctx)
@@ -189,6 +173,8 @@ def query_datafusion_sources(
             f"'POLYGON(({xmin} {ymin}, {xmax} {ymin}, {xmax} {ymax}, {xmin} {ymax}, {xmin} {ymin}))'"
             "))"
         )
+        if sortby is not None:
+            query += f' ORDER BY "{sortby}"'
 
         df = ctx.sql(query)
         batches = df.collect()

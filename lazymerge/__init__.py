@@ -9,6 +9,7 @@ from lazymerge.conventions import (
     write_proj as write_proj,
     write_spatial as write_spatial,
 )
+from lazymerge.explain import ExplainPlan as ExplainPlan, explain as explain
 from lazymerge.merge import merge as merge
 from lazymerge.sources import (
     ScanIndex as ScanIndex,
@@ -18,4 +19,3 @@ from lazymerge.sources import (
     select_overview as select_overview,
 )
 from lazymerge.target import create_target as create_target, to_zarr as to_zarr
-from lazymerge.warp import warp_chunk as warp_chunk

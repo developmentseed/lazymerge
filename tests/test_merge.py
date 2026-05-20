@@ -6,8 +6,7 @@ import zarr
 from lazymerge.conventions import ProjAttrs, SpatialAttrs, write_proj, write_spatial
 from lazymerge.merge import merge
 from lazymerge.sources import scan_store
-from lazymerge.target import create_target
-from lazymerge.warp import warp_chunk as real_warp_chunk
+from lazymerge.warp import warp_source_region as real_warp_source_region
 
 
 def _make_same_crs_store():
@@ -95,19 +94,13 @@ def test_merge_two_adjacent_sources_same_crs():
     store, root = _make_same_crs_store()
     index = scan_store(root)
 
-    target, spatial, proj = create_target(
+    result_arr, result_spatial, result_proj = merge(
+        store=store,
         crs="EPSG:32618",
         bbox=(500000.0, 5999000.0, 502000.0, 6000000.0),
         resolution=10.0,
         chunk_size=(50, 50),
-    )
-
-    result_arr, result_spatial, result_proj = merge(
         source_index=index,
-        target=target,
-        target_spatial=spatial,
-        target_proj=proj,
-        store=store,
     )
 
     data = result_arr.compute()
@@ -123,20 +116,13 @@ def test_merge_mixed_crs():
     store, root = _make_mixed_crs_store()
     index = scan_store(root)
 
-    # Target in UTM 18N spanning both sources
-    target, spatial, proj = create_target(
+    result_arr, _, _ = merge(
+        store=store,
         crs="EPSG:32618",
         bbox=(500000.0, 5999000.0, 502000.0, 6000000.0),
         resolution=10.0,
         chunk_size=(50, 50),
-    )
-
-    result_arr, _, _ = merge(
         source_index=index,
-        target=target,
-        target_spatial=spatial,
-        target_proj=proj,
-        store=store,
     )
 
     data = result_arr.compute()
@@ -186,28 +172,22 @@ def test_merge_early_stop():
     store, root = _make_overlapping_store()
     index = scan_store(root)
 
-    target, spatial, proj = create_target(
-        crs="EPSG:32618",
-        bbox=(500000.0, 5999000.0, 501000.0, 6000000.0),
-        resolution=10.0,
-        chunk_size=(100, 100),
-    )
-
     warp_call_count = 0
-    original_warp = real_warp_chunk
+    original_warp = real_warp_source_region
 
     def counting_warp(*args, **kwargs):
         nonlocal warp_call_count
         warp_call_count += 1
         return original_warp(*args, **kwargs)
 
-    with patch("lazymerge.merge.warp_chunk", side_effect=counting_warp):
+    with patch("lazymerge.merge.warp_source_region", side_effect=counting_warp):
         result_arr, _, _ = merge(
-            source_index=index,
-            target=target,
-            target_spatial=spatial,
-            target_proj=proj,
             store=store,
+            crs="EPSG:32618",
+            bbox=(500000.0, 5999000.0, 501000.0, 6000000.0),
+            resolution=10.0,
+            chunk_size=(100, 100),
+            source_index=index,
         )
         data = result_arr.compute()
 
@@ -224,19 +204,13 @@ def test_merge_no_sources():
     store, root = _make_same_crs_store()
     index = scan_store(root)
 
-    target, spatial, proj = create_target(
+    result_arr, _, _ = merge(
+        store=store,
         crs="EPSG:32618",
         bbox=(600000.0, 5999000.0, 601000.0, 6000000.0),
         resolution=10.0,
         chunk_size=(50, 50),
-    )
-
-    result_arr, _, _ = merge(
         source_index=index,
-        target=target,
-        target_spatial=spatial,
-        target_proj=proj,
-        store=store,
     )
 
     data = result_arr.compute()
@@ -332,19 +306,13 @@ def test_merge_with_band_uses_base_resolution():
         ))
     index = ScanIndex(entries)
 
-    target, spatial, proj = create_target(
+    result_arr, _, _ = merge(
+        store=store,
         crs="EPSG:32618",
         bbox=(500000.0, 5999000.0, 502000.0, 6000000.0),
         resolution=10.0,
         chunk_size=(50, 50),
-    )
-
-    result_arr, _, _ = merge(
         source_index=index,
-        target=target,
-        target_spatial=spatial,
-        target_proj=proj,
-        store=store,
         band="red",
     )
 
@@ -377,19 +345,13 @@ def test_merge_with_band_selects_overview():
     index = ScanIndex(entries)
 
     # Target at 20m resolution — should trigger overview selection (level 1)
-    target, spatial, proj = create_target(
+    result_arr, _, _ = merge(
+        store=store,
         crs="EPSG:32618",
         bbox=(500000.0, 5999000.0, 502000.0, 6000000.0),
         resolution=20.0,
         chunk_size=(25, 25),
-    )
-
-    result_arr, _, _ = merge(
         source_index=index,
-        target=target,
-        target_spatial=spatial,
-        target_proj=proj,
-        store=store,
         band="red",
     )
 
@@ -405,19 +367,13 @@ def test_merge_band_none_preserves_behavior():
     store, root = _make_same_crs_store()
     index = scan_store(root)
 
-    target, spatial, proj = create_target(
+    result_arr, _, _ = merge(
+        store=store,
         crs="EPSG:32618",
         bbox=(500000.0, 5999000.0, 502000.0, 6000000.0),
         resolution=10.0,
         chunk_size=(50, 50),
-    )
-
-    result_arr, _, _ = merge(
         source_index=index,
-        target=target,
-        target_spatial=spatial,
-        target_proj=proj,
-        store=store,
         band=None,
     )
 
