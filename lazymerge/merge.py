@@ -99,7 +99,7 @@ def _merge_block(
     store: Any,
     chunk_size: tuple[int, int],
     resampling: str,
-    band: str | None = None,
+    bands: list[str] | None = None,
     datafusion: bool = False,
     sortby: str | None = None,
     nodata: float | int | None = None,
@@ -109,8 +109,15 @@ def _merge_block(
     if target_crs is None:
         raise ValueError("target_proj.code must not be None")
 
-    # Compute this chunk's spatial bbox
-    row_idx, col_idx = block_id
+    # For multi-band targets, block_id has 3 elements: (band_idx, row, col).
+    # Extract the band name and spatial indices accordingly.
+    if bands is not None and len(bands) > 1:
+        band_idx, row_idx, col_idx = block_id
+        band = bands[band_idx]
+    else:
+        row_idx, col_idx = block_id
+        band = bands[0] if bands else None
+
     cb = chunk_bbox(target_spatial, (row_idx, col_idx), chunk_size)
 
     # Compute chunk-local transform (shift origin to this chunk's pixel offset)
@@ -122,9 +129,16 @@ def _merge_block(
     chunk_transform = (a, b, chunk_c, d, e, chunk_f)
 
     # Actual chunk shape (may be smaller at edges)
-    actual_shape: tuple[int, int] = (block.shape[0], block.shape[1])
+    if bands is not None and len(bands) > 1:
+        actual_shape: tuple[int, int] = (block.shape[1], block.shape[2])
+    else:
+        actual_shape = (block.shape[0], block.shape[1])
 
+    multi_band = bands is not None and len(bands) > 1
     output = np.full(actual_shape, np.nan, dtype=block.dtype)
+
+    def _result(arr: np.ndarray) -> np.ndarray:
+        return arr[np.newaxis, :, :] if multi_band else arr
 
     # Pass 1: find intersecting sources
     if datafusion:
@@ -133,10 +147,10 @@ def _merge_block(
     elif source_index is not None:
         sources = source_index.find_intersecting_sources(cb, target_crs)
     else:
-        return output
+        return _result(output)
 
     if not sources:
-        return output
+        return _result(output)
 
     # Resolve a zarr-compatible store for reading arrays.
     # obstore LocalStore isn't zarr-compatible, so use its path instead.
@@ -271,7 +285,7 @@ def _merge_block(
         output[mask] = warped[mask]
         unfilled -= int(np.count_nonzero(mask))
 
-    return output
+    return _result(output)
 
 
 def merge(
@@ -282,7 +296,7 @@ def merge(
     chunk_size: tuple[int, int] = (512, 512),
     source_index: ScanIndex | None = None,
     resampling: str = "nearest",
-    band: str | None = None,
+    bands: list[str] | str | None = None,
     datafusion: bool = False,
     sortby: str | None = None,
     nodata: float | int | None = None,
@@ -291,10 +305,27 @@ def merge(
 ) -> tuple[cubed.Array, SpatialAttrs, ProjAttrs]:
     from lazymerge.target import create_target
 
+    # Normalise bands to a list or None
+    if isinstance(bands, str):
+        bands_list: list[str] | None = [bands]
+    else:
+        bands_list = bands
+
     target, target_spatial, target_proj = create_target(
         crs=crs, bbox=bbox, resolution=resolution,
         chunk_size=chunk_size, dtype=dtype,
     )
+
+    # For multiple bands, prepend a band dimension to the target array
+    multi_band = bands_list is not None and len(bands_list) > 1
+    if multi_band:
+        n_bands = len(bands_list)
+        target = cubed.full(
+            shape=(n_bands, *target.shape),
+            fill_value=float("nan"),
+            dtype=target.dtype,
+            chunks=(1, *target.chunksize),
+        )
 
     result = cubed.map_blocks(
         _merge_block,
@@ -307,7 +338,7 @@ def merge(
         store=store,
         chunk_size=chunk_size,
         resampling=resampling,
-        band=band,
+        bands=bands_list,
         datafusion=datafusion,
         sortby=sortby,
         nodata=nodata,

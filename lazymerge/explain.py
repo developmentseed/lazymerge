@@ -81,7 +81,7 @@ class ExplainPlan:
     target_resolution: float
     target_shape: tuple[int, int]
     chunk_size: tuple[int, int]
-    band: str | None
+    bands: list[str] | None
     resampling: str
     nodata: float | int | None
     chunk_reads: list[ChunkRead]
@@ -141,7 +141,7 @@ class ExplainPlan:
             "=== ExplainPlan ===",
             f"CRS:        {self.target_crs}  |  Resolution: {self.target_resolution} units/px"
             f"  |  Grid: {self.target_shape[1]} x {self.target_shape[0]} px",
-            f"Band:       {self.band or '(none)'}",
+            f"Bands:      {', '.join(self.bands) if self.bands else '(none)'}",
             f"Resampling: {self.resampling}  |  Nodata: {self.nodata}",
             f"Chunks:     {self.chunk_size[1]} x {self.chunk_size[0]} px"
             f" -> {n_x}x{n_y} spatial tiles",
@@ -223,7 +223,7 @@ def explain(
     chunk_size: tuple[int, int] = (512, 512),
     source_index: ScanIndex | None = None,
     resampling: str = "nearest",
-    band: str | None = None,
+    bands: list[str] | str | None = None,
     datafusion: bool = False,
     sortby: str | None = None,
     nodata: float | int | None = None,
@@ -235,6 +235,12 @@ def explain(
     logic as ``merge``, but never reads pixel data.
     """
     import math
+
+    # Normalise bands to a list or None
+    if isinstance(bands, str):
+        bands_list: list[str] | None = [bands]
+    else:
+        bands_list = bands
 
     target_crs = crs
     xmin, ymin, xmax, ymax = bbox
@@ -295,126 +301,130 @@ def explain(
 
             source_reads: list[SourceRead] = []
 
+            # Determine which band names to iterate over for this chunk.
+            band_names = bands_list if bands_list is not None else [None]
+
             for source_entry in sources:
                 src_crs = source_entry.proj_attrs.code or "EPSG:4326"
 
-                selected_path = "0"
-                native_res: float | None = None
-                overview_res: float | None = None
+                for band in band_names:
+                    selected_path = "0"
+                    native_res: float | None = None
+                    overview_res: float | None = None
 
-                if band is not None:
-                    root = zarr.open_group(zarr_store, mode="r")
-                    try:
-                        source_group = root[source_entry.path]
-                    except KeyError:
-                        continue
-                    if not isinstance(source_group, zarr.Group):
-                        continue
-                    try:
-                        band_group = source_group[band]
-                    except KeyError:
-                        continue
-                    if not isinstance(band_group, zarr.Group):
-                        continue
+                    if band is not None:
+                        root = zarr.open_group(zarr_store, mode="r")
+                        try:
+                            source_group = root[source_entry.path]
+                        except KeyError:
+                            continue
+                        if not isinstance(source_group, zarr.Group):
+                            continue
+                        try:
+                            band_group = source_group[band]
+                        except KeyError:
+                            continue
+                        if not isinstance(band_group, zarr.Group):
+                            continue
 
-                    band_attrs = dict(band_group.attrs)
-                    source_attrs = dict(source_group.attrs)
-                    if "multiscales" in band_attrs:
-                        array_root = band_group
-                    elif "multiscales" in source_attrs:
-                        array_root = source_group
-                    else:
-                        array_root = band_group
-
-                    base_array = _resolve_array(array_root, "0")
-                    if base_array is not None:
-                        base_spatial = _read_spatial_or_derive(
-                            base_array, source_entry.spatial_attrs, scale_factor=1.0
-                        )
-                        native_res = abs(base_spatial.transform[0])
-
-                    overviews = read_multiscales(array_root, native_res=native_res)
-
-                    if overviews is not None and native_res is not None:
-                        target_res = abs(target_spatial.transform[0])
-                        if target_crs != src_crs:
-                            transformer = Transformer.from_crs(
-                                target_crs, src_crs, always_xy=True
-                            )
-                            cx = (cb[0] + cb[2]) / 2
-                            cy = (cb[1] + cb[3]) / 2
-                            x0, y0 = transformer.transform(cx, cy)
-                            x1, y1 = transformer.transform(cx + target_res, cy)
-                            src_target_res = ((x1 - x0) ** 2 + (y1 - y0) ** 2) ** 0.5
+                        band_attrs = dict(band_group.attrs)
+                        source_attrs = dict(source_group.attrs)
+                        if "multiscales" in band_attrs:
+                            array_root = band_group
+                        elif "multiscales" in source_attrs:
+                            array_root = source_group
                         else:
-                            src_target_res = target_res
+                            array_root = band_group
 
-                        overview = select_overview(overviews, src_target_res, native_res)
-                        if overview is not None:
-                            selected_path = overview.path
-                            overview_res = overview.resolution
+                        base_array = _resolve_array(array_root, "0")
+                        if base_array is not None:
+                            base_spatial = _read_spatial_or_derive(
+                                base_array, source_entry.spatial_attrs, scale_factor=1.0
+                            )
+                            native_res = abs(base_spatial.transform[0])
 
-                    src_array = _resolve_array(array_root, selected_path)
-                    if src_array is None or not isinstance(src_array, zarr.Array):
+                        overviews = read_multiscales(array_root, native_res=native_res)
+
+                        if overviews is not None and native_res is not None:
+                            target_res = abs(target_spatial.transform[0])
+                            if target_crs != src_crs:
+                                transformer = Transformer.from_crs(
+                                    target_crs, src_crs, always_xy=True
+                                )
+                                cx = (cb[0] + cb[2]) / 2
+                                cy = (cb[1] + cb[3]) / 2
+                                x0, y0 = transformer.transform(cx, cy)
+                                x1, y1 = transformer.transform(cx + target_res, cy)
+                                src_target_res = ((x1 - x0) ** 2 + (y1 - y0) ** 2) ** 0.5
+                            else:
+                                src_target_res = target_res
+
+                            overview = select_overview(overviews, src_target_res, native_res)
+                            if overview is not None:
+                                selected_path = overview.path
+                                overview_res = overview.resolution
+
+                        src_array = _resolve_array(array_root, selected_path)
+                        if src_array is None or not isinstance(src_array, zarr.Array):
+                            continue
+
+                        ovr_scale = 1.0
+                        if overviews is not None and selected_path != "0":
+                            for ovr in overviews:
+                                if ovr.path == selected_path:
+                                    ovr_scale = ovr.scale[1]
+                                    break
+                        resolved_spatial = _read_spatial_or_derive(
+                            src_array, source_entry.spatial_attrs, scale_factor=ovr_scale
+                        )
+                        resolved_proj = _read_proj_or_derive(
+                            src_array, source_entry.proj_attrs
+                        )
+                        resolved_path = f"{source_entry.path}/{band}/{selected_path}"
+                    else:
+                        root = zarr.open_group(zarr_store, mode="r")
+                        try:
+                            src_array = root[source_entry.path]
+                        except KeyError:
+                            continue
+                        if not isinstance(src_array, zarr.Array):
+                            continue
+                        resolved_spatial = source_entry.spatial_attrs
+                        resolved_proj = source_entry.proj_attrs
+                        resolved_path = source_entry.path
+
+                    # Compute target->source pixel mapping to find the read region
+                    src_row_f, src_col_f = _target_to_source_pixels(
+                        chunk_transform, target_crs, actual_shape,
+                        resolved_spatial.transform, src_crs,
+                    )
+
+                    src_h = resolved_spatial.shape[0]
+                    src_w = resolved_spatial.shape[1]
+                    r_min = max(int(np.floor(np.nanmin(src_row_f))), 0)
+                    r_max = min(int(np.ceil(np.nanmax(src_row_f))) + 1, src_h)
+                    c_min = max(int(np.floor(np.nanmin(src_col_f))), 0)
+                    c_max = min(int(np.ceil(np.nanmax(src_col_f))) + 1, src_w)
+
+                    if r_min >= r_max or c_min >= c_max:
                         continue
 
-                    ovr_scale = 1.0
-                    if overviews is not None and selected_path != "0":
-                        for ovr in overviews:
-                            if ovr.path == selected_path:
-                                ovr_scale = ovr.scale[1]
-                                break
-                    resolved_spatial = _read_spatial_or_derive(
-                        src_array, source_entry.spatial_attrs, scale_factor=ovr_scale
+                    if overview_res is None and native_res is not None:
+                        overview_res = native_res
+
+                    source_reads.append(
+                        SourceRead(
+                            source_path=resolved_path,
+                            source_crs=src_crs,
+                            overview_path=selected_path,
+                            native_resolution=native_res,
+                            overview_resolution=overview_res,
+                            region_row_start=r_min,
+                            region_row_end=r_max,
+                            region_col_start=c_min,
+                            region_col_end=c_max,
+                        )
                     )
-                    resolved_proj = _read_proj_or_derive(
-                        src_array, source_entry.proj_attrs
-                    )
-                    resolved_path = f"{source_entry.path}/{band}/{selected_path}"
-                else:
-                    root = zarr.open_group(zarr_store, mode="r")
-                    try:
-                        src_array = root[source_entry.path]
-                    except KeyError:
-                        continue
-                    if not isinstance(src_array, zarr.Array):
-                        continue
-                    resolved_spatial = source_entry.spatial_attrs
-                    resolved_proj = source_entry.proj_attrs
-                    resolved_path = source_entry.path
-
-                # Compute target->source pixel mapping to find the read region
-                src_row_f, src_col_f = _target_to_source_pixels(
-                    chunk_transform, target_crs, actual_shape,
-                    resolved_spatial.transform, src_crs,
-                )
-
-                src_h = resolved_spatial.shape[0]
-                src_w = resolved_spatial.shape[1]
-                r_min = max(int(np.floor(np.nanmin(src_row_f))), 0)
-                r_max = min(int(np.ceil(np.nanmax(src_row_f))) + 1, src_h)
-                c_min = max(int(np.floor(np.nanmin(src_col_f))), 0)
-                c_max = min(int(np.ceil(np.nanmax(src_col_f))) + 1, src_w)
-
-                if r_min >= r_max or c_min >= c_max:
-                    continue
-
-                if overview_res is None and native_res is not None:
-                    overview_res = native_res
-
-                source_reads.append(
-                    SourceRead(
-                        source_path=resolved_path,
-                        source_crs=src_crs,
-                        overview_path=selected_path,
-                        native_resolution=native_res,
-                        overview_resolution=overview_res,
-                        region_row_start=r_min,
-                        region_row_end=r_max,
-                        region_col_start=c_min,
-                        region_col_end=c_max,
-                    )
-                )
 
             chunk_reads.append(
                 ChunkRead(
@@ -432,7 +442,7 @@ def explain(
         target_resolution=abs(target_spatial.transform[0]),
         target_shape=(target_h, target_w),
         chunk_size=chunk_size,
-        band=band,
+        bands=bands_list,
         resampling=resampling,
         nodata=nodata,
         chunk_reads=chunk_reads,

@@ -313,7 +313,7 @@ def test_merge_with_band_uses_base_resolution():
         resolution=10.0,
         chunk_size=(50, 50),
         source_index=index,
-        band="red",
+        bands="red",
     )
 
     data = result_arr.compute()
@@ -352,7 +352,7 @@ def test_merge_with_band_selects_overview():
         resolution=20.0,
         chunk_size=(25, 25),
         source_index=index,
-        band="red",
+        bands="red",
     )
 
     data = result_arr.compute()
@@ -362,8 +362,8 @@ def test_merge_with_band_selects_overview():
     np.testing.assert_array_equal(data[:, 50:], 20.0)
 
 
-def test_merge_band_none_preserves_behavior():
-    """Passing band=None explicitly should work identically to omitting it."""
+def test_merge_bands_none_preserves_behavior():
+    """Passing bands=None explicitly should work identically to omitting it."""
     store, root = _make_same_crs_store()
     index = scan_store(root)
 
@@ -374,7 +374,130 @@ def test_merge_band_none_preserves_behavior():
         resolution=10.0,
         chunk_size=(50, 50),
         source_index=index,
-        band=None,
+        bands=None,
+    )
+
+    data = result_arr.compute()
+    assert data.shape == (100, 200)
+    np.testing.assert_array_equal(data[:, :100], 1.0)
+    np.testing.assert_array_equal(data[:, 100:], 2.0)
+
+
+def _make_multiband_store():
+    """Create a store with two scenes, each having 'red' and 'green' band groups.
+
+    Structure:
+      scene_a/
+        red/0   (100x100 at 10m, filled with 1.0)
+        green/0 (100x100 at 10m, filled with 10.0)
+      scene_b/
+        red/0   (100x100 at 10m, filled with 2.0)
+        green/0 (100x100 at 10m, filled with 20.0)
+    """
+    store = zarr.storage.MemoryStore()
+    root = zarr.open_group(store, mode="w")
+
+    for name, x_origin, fills in [
+        ("scene_a", 500000.0, {"red": 1.0, "green": 10.0}),
+        ("scene_b", 501000.0, {"red": 2.0, "green": 20.0}),
+    ]:
+        scene = root.create_group(name)
+        for band_name, fill in fills.items():
+            band_group = scene.create_group(band_name)
+            arr = band_group.create_array("0", shape=(100, 100), dtype="f4", chunks=(50, 50))
+            arr[:] = fill
+            write_spatial(
+                arr,
+                SpatialAttrs(
+                    dimensions=["y", "x"],
+                    transform=(10.0, 0.0, x_origin, 0.0, -10.0, 6000000.0),
+                    bbox=(x_origin, 5999000.0, x_origin + 1000.0, 6000000.0),
+                    shape=(100, 100),
+                ),
+            )
+            write_proj(arr, ProjAttrs(code="EPSG:32618"))
+
+    return store, root
+
+
+def _make_multiband_index():
+    from lazymerge.sources import SourceEntry, ScanIndex
+
+    entries = []
+    for name, x_origin in [("scene_a", 500000.0), ("scene_b", 501000.0)]:
+        entries.append(SourceEntry(
+            path=name,
+            spatial_attrs=SpatialAttrs(
+                dimensions=["y", "x"],
+                transform=(10.0, 0.0, x_origin, 0.0, -10.0, 6000000.0),
+                bbox=(x_origin, 5999000.0, x_origin + 1000.0, 6000000.0),
+                shape=(100, 100),
+            ),
+            proj_attrs=ProjAttrs(code="EPSG:32618"),
+            chunk_shape=(50, 50),
+        ))
+    return ScanIndex(entries)
+
+
+def test_merge_multi_band():
+    """Multiple bands produce a 3D (band, y, x) output."""
+    store, root = _make_multiband_store()
+    index = _make_multiband_index()
+
+    result_arr, _, _ = merge(
+        store=store,
+        crs="EPSG:32618",
+        bbox=(500000.0, 5999000.0, 502000.0, 6000000.0),
+        resolution=10.0,
+        chunk_size=(50, 50),
+        source_index=index,
+        bands=["red", "green"],
+    )
+
+    data = result_arr.compute()
+    assert data.shape == (2, 100, 200)
+    # Band 0 = red: scene_a=1.0 (left), scene_b=2.0 (right)
+    np.testing.assert_array_equal(data[0, :, :100], 1.0)
+    np.testing.assert_array_equal(data[0, :, 100:], 2.0)
+    # Band 1 = green: scene_a=10.0 (left), scene_b=20.0 (right)
+    np.testing.assert_array_equal(data[1, :, :100], 10.0)
+    np.testing.assert_array_equal(data[1, :, 100:], 20.0)
+
+
+def test_merge_single_band_list_stays_2d():
+    """A single-element bands list produces 2D output (no band dimension)."""
+    store, root = _make_multiband_store()
+    index = _make_multiband_index()
+
+    result_arr, _, _ = merge(
+        store=store,
+        crs="EPSG:32618",
+        bbox=(500000.0, 5999000.0, 502000.0, 6000000.0),
+        resolution=10.0,
+        chunk_size=(50, 50),
+        source_index=index,
+        bands=["red"],
+    )
+
+    data = result_arr.compute()
+    assert data.shape == (100, 200)
+    np.testing.assert_array_equal(data[:, :100], 1.0)
+    np.testing.assert_array_equal(data[:, 100:], 2.0)
+
+
+def test_merge_single_band_string_stays_2d():
+    """A string bands value produces 2D output (backward compat)."""
+    store, root = _make_multiband_store()
+    index = _make_multiband_index()
+
+    result_arr, _, _ = merge(
+        store=store,
+        crs="EPSG:32618",
+        bbox=(500000.0, 5999000.0, 502000.0, 6000000.0),
+        resolution=10.0,
+        chunk_size=(50, 50),
+        source_index=index,
+        bands="red",
     )
 
     data = result_arr.compute()
