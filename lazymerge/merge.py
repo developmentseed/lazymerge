@@ -103,6 +103,7 @@ def _merge_block(
     datafusion: bool = False,
     sortby: str | None = None,
     nodata: float | int | None = None,
+    sql_filter: str | None = None,
 ) -> np.ndarray:
     target_crs = target_proj.code
     if target_crs is None:
@@ -128,7 +129,7 @@ def _merge_block(
     # Pass 1: find intersecting sources
     if datafusion:
         bbox_4326 = _reproject_bbox_to_4326(cb, target_crs)
-        sources = query_datafusion_sources(store, bbox_4326, sortby=sortby)
+        sources = query_datafusion_sources(store, bbox_4326, sortby=sortby, sql_filter=sql_filter)
     elif source_index is not None:
         sources = source_index.find_intersecting_sources(cb, target_crs)
     else:
@@ -285,6 +286,7 @@ def merge(
     datafusion: bool = False,
     sortby: str | None = None,
     nodata: float | int | None = None,
+    sql_filter: str | None = None,
     dtype: str = "float32",
 ) -> tuple[cubed.Array, SpatialAttrs, ProjAttrs]:
     from lazymerge.target import create_target
@@ -309,6 +311,7 @@ def merge(
         datafusion=datafusion,
         sortby=sortby,
         nodata=nodata,
+        sql_filter=sql_filter,
     )
 
     return result, target_spatial, target_proj

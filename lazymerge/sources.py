@@ -122,6 +122,7 @@ def query_datafusion_sources(
     store: Any,
     bbox_4326: tuple[float, float, float, float],
     sortby: str | None = None,
+    sql_filter: str | None = None,
 ) -> list[SourceEntry]:
     """Query the /meta group via DataFusion for sources intersecting bbox_4326.
 
@@ -135,6 +136,9 @@ def query_datafusion_sources(
         sortby: Optional column name to sort results by (e.g. a datetime field).
             Controls the order in which sources are composited — earlier entries
             take priority for filling NaN pixels.
+        sql_filter: Optional SQL expression appended as an AND clause to the
+            spatial intersection query.  For example:
+            ``'"eo:cloud_cover" < 20'`` or ``'"datetime" > \\'2024-01-01\\''``.
 
     Returns:
         List of SourceEntry objects for matching sources. chunk_shape is set
@@ -173,6 +177,8 @@ def query_datafusion_sources(
             f"'POLYGON(({xmin} {ymin}, {xmax} {ymin}, {xmax} {ymax}, {xmin} {ymax}, {xmin} {ymin}))'"
             "))"
         )
+        if sql_filter is not None:
+            query += f" AND ({sql_filter})"
         if sortby is not None:
             query += f' ORDER BY "{sortby}"'
 

@@ -227,6 +227,7 @@ def explain(
     datafusion: bool = False,
     sortby: str | None = None,
     nodata: float | int | None = None,
+    sql_filter: str | None = None,
 ) -> ExplainPlan:
     """Dry-run a merge: report which source regions would be read per chunk.
 
@@ -283,10 +284,10 @@ def explain(
                     asyncio.get_running_loop()
                     with concurrent.futures.ThreadPoolExecutor(1) as pool:
                         sources = pool.submit(
-                            query_datafusion_sources, store, bbox_4326, sortby=sortby
+                            query_datafusion_sources, store, bbox_4326, sortby=sortby, sql_filter=sql_filter
                         ).result()
                 except RuntimeError:
-                    sources = query_datafusion_sources(store, bbox_4326, sortby=sortby)
+                    sources = query_datafusion_sources(store, bbox_4326, sortby=sortby, sql_filter=sql_filter)
             elif source_index is not None:
                 sources = source_index.find_intersecting_sources(cb, target_crs)
             else:
