@@ -1,7 +1,21 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
-from typing import cast
+from typing import Any, TypeVar, cast
+
+T = TypeVar("T")
+
+
+def _run_async(coro: Any) -> Any:
+    """Run an async coroutine, handling both fresh and running event loops (e.g. Jupyter)."""
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    import nest_asyncio
+    nest_asyncio.apply(loop)
+    return loop.run_until_complete(coro)
 
 import zarr
 from pyproj import Transformer
@@ -144,7 +158,6 @@ def query_datafusion_sources(
         List of SourceEntry objects for matching sources. chunk_shape is set
         to a placeholder (0, 0) since it is resolved from the actual array.
     """
-    import asyncio
     from datafusion import SessionContext
     from geodatafusion import register_all
     from zarr_datafusion_search import ZarrTable
@@ -219,4 +232,66 @@ def query_datafusion_sources(
                 ))
         return entries
 
-    return asyncio.run(_query())
+    return _run_async(_query())
+
+
+def query_temporal_groups(
+    store: Any,
+    bbox_4326: tuple[float, float, float, float],
+    grouper: Any,
+    sql_filter: str | None = None,
+) -> list[str]:
+    """Query distinct datetime values from /meta and bucket them into temporal groups.
+
+    Args:
+        store: An obstore-compatible object store, Icechunk Session, or zarr Store.
+        bbox_4326: Query bounding box in EPSG:4326 (xmin, ymin, xmax, ymax).
+        grouper: A TemporalGrouper instance used to bucket datetime strings.
+        sql_filter: Optional SQL expression appended as an AND clause.
+
+    Returns:
+        Sorted list of unique group keys.
+    """
+    from datafusion import SessionContext
+    from geodatafusion import register_all
+    from zarr_datafusion_search import ZarrTable
+
+    async def _query() -> list[str]:
+        try:
+            from icechunk import IcechunkStore
+            if isinstance(store, IcechunkStore):
+                zarr_table = await ZarrTable.from_icechunk(
+                    session=store.session, group_path="/meta"
+                )
+            else:
+                zarr_table = await ZarrTable.from_obstore(store, "/meta")
+        except ImportError:
+            zarr_table = await ZarrTable.from_obstore(store, "/meta")
+
+        ctx = SessionContext()
+        register_all(ctx)
+        ctx.register_table("meta", zarr_table)
+
+        xmin, ymin, xmax, ymax = bbox_4326
+        query = (
+            "SELECT DISTINCT datetime "
+            "FROM meta "
+            "WHERE ST_Intersects(bbox, ST_GeomFromText("
+            f"'POLYGON(({xmin} {ymin}, {xmax} {ymin}, {xmax} {ymax}, {xmin} {ymax}, {xmin} {ymin}))'"
+            "))"
+        )
+        if sql_filter is not None:
+            query += f" AND ({sql_filter})"
+
+        df = ctx.sql(query)
+        batches = df.collect()
+
+        datetimes: list[str] = []
+        for batch in batches:
+            for i in range(batch.num_rows):
+                datetimes.append(str(batch.column("datetime")[i].as_py()))
+        return datetimes
+
+    datetimes = _run_async(_query())
+    keys = sorted(set(grouper.group_key(dt) for dt in datetimes))
+    return keys

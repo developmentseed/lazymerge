@@ -9,7 +9,8 @@ import cubed
 from pyproj import Transformer
 
 from lazymerge.conventions import SpatialAttrs, ProjAttrs, chunk_bbox, read_multiscales, read_spatial, read_proj
-from lazymerge.sources import ScanIndex, SourceEntry, select_overview, query_datafusion_sources
+from lazymerge.sources import ScanIndex, SourceEntry, select_overview, query_datafusion_sources, query_temporal_groups
+from lazymerge.temporal import TemporalGrouper, grouper_from_period
 from lazymerge.warp import _target_to_source_pixels, warp_source_region
 
 
@@ -104,19 +105,28 @@ def _merge_block(
     sortby: str | None = None,
     nodata: float | int | None = None,
     sql_filter: str | None = None,
+    temporal_grouper: TemporalGrouper | None = None,
+    time_groups: list[str] | None = None,
 ) -> np.ndarray:
     target_crs = target_proj.code
     if target_crs is None:
         raise ValueError("target_proj.code must not be None")
 
-    # For multi-band targets, block_id has 3 elements: (band_idx, row, col).
-    # Extract the band name and spatial indices accordingly.
-    if bands is not None and len(bands) > 1:
-        band_idx, row_idx, col_idx = block_id
+    has_time = temporal_grouper is not None and time_groups is not None
+    multi_band = bands is not None and len(bands) > 1
+
+    # Unpack block_id based on which dimensions are present.
+    # Dimension order: [time], [band], row, col
+    idx = list(block_id)
+    time_idx: int | None = None
+    if has_time:
+        time_idx = idx.pop(0)
+    if multi_band:
+        band_idx = idx.pop(0)
         band = bands[band_idx]
     else:
-        row_idx, col_idx = block_id
         band = bands[0] if bands else None
+    row_idx, col_idx = idx
 
     cb = chunk_bbox(target_spatial, (row_idx, col_idx), chunk_size)
 
@@ -129,21 +139,32 @@ def _merge_block(
     chunk_transform = (a, b, chunk_c, d, e, chunk_f)
 
     # Actual chunk shape (may be smaller at edges)
-    if bands is not None and len(bands) > 1:
-        actual_shape: tuple[int, int] = (block.shape[1], block.shape[2])
-    else:
-        actual_shape = (block.shape[0], block.shape[1])
+    actual_shape: tuple[int, int] = (block.shape[-2], block.shape[-1])
 
-    multi_band = bands is not None and len(bands) > 1
     output = np.full(actual_shape, np.nan, dtype=block.dtype)
 
     def _result(arr: np.ndarray) -> np.ndarray:
-        return arr[np.newaxis, :, :] if multi_band else arr
+        if has_time and multi_band:
+            return arr[np.newaxis, np.newaxis, :, :]
+        if has_time or multi_band:
+            return arr[np.newaxis, :, :]
+        return arr
+
+    # Build effective SQL filter combining user filter + temporal filter
+    effective_sql_filter = sql_filter
+    if has_time and time_idx is not None:
+        group_key = time_groups[time_idx]
+        t_start, t_end = temporal_grouper.datetime_filter(group_key)
+        temporal_clause = f"\"datetime\" >= '{t_start}' AND \"datetime\" < '{t_end}'"
+        if effective_sql_filter is not None:
+            effective_sql_filter = f"({effective_sql_filter}) AND ({temporal_clause})"
+        else:
+            effective_sql_filter = temporal_clause
 
     # Pass 1: find intersecting sources
     if datafusion:
         bbox_4326 = _reproject_bbox_to_4326(cb, target_crs)
-        sources = query_datafusion_sources(store, bbox_4326, sortby=sortby, sql_filter=sql_filter)
+        sources = query_datafusion_sources(store, bbox_4326, sortby=sortby, sql_filter=effective_sql_filter)
     elif source_index is not None:
         sources = source_index.find_intersecting_sources(cb, target_crs)
     else:
@@ -302,7 +323,8 @@ def merge(
     nodata: float | int | None = None,
     sql_filter: str | None = None,
     dtype: str = "float32",
-) -> tuple[cubed.Array, SpatialAttrs, ProjAttrs]:
+    temporal_grouping: str | None = None,
+) -> tuple[cubed.Array, SpatialAttrs, ProjAttrs, np.ndarray | None]:
     from lazymerge.target import create_target
 
     # Normalise bands to a list or None
@@ -311,14 +333,44 @@ def merge(
     else:
         bands_list = bands
 
+    temporal_grouper: TemporalGrouper | None = None
+    time_groups: list[str] | None = None
+    if temporal_grouping is not None:
+        if not datafusion:
+            raise ValueError("temporal_grouping requires datafusion=True")
+        temporal_grouper = grouper_from_period(temporal_grouping)
+        bbox_4326 = _reproject_bbox_to_4326(bbox, crs)
+        time_groups = query_temporal_groups(
+            store, bbox_4326, temporal_grouper, sql_filter=sql_filter,
+        )
+
     target, target_spatial, target_proj = create_target(
         crs=crs, bbox=bbox, resolution=resolution,
         chunk_size=chunk_size, dtype=dtype,
     )
 
-    # For multiple bands, prepend a band dimension to the target array
+    # Prepend extra dimensions as needed
     multi_band = bands_list is not None and len(bands_list) > 1
-    if multi_band:
+    has_time = time_groups is not None and len(time_groups) > 0
+
+    if has_time and multi_band:
+        n_times = len(time_groups)
+        n_bands = len(bands_list)
+        target = cubed.full(
+            shape=(n_times, n_bands, *target.shape),
+            fill_value=float("nan"),
+            dtype=target.dtype,
+            chunks=(1, 1, *target.chunksize),
+        )
+    elif has_time:
+        n_times = len(time_groups)
+        target = cubed.full(
+            shape=(n_times, *target.shape),
+            fill_value=float("nan"),
+            dtype=target.dtype,
+            chunks=(1, *target.chunksize),
+        )
+    elif multi_band:
         n_bands = len(bands_list)
         target = cubed.full(
             shape=(n_bands, *target.shape),
@@ -343,6 +395,14 @@ def merge(
         sortby=sortby,
         nodata=nodata,
         sql_filter=sql_filter,
+        temporal_grouper=temporal_grouper,
+        time_groups=time_groups,
     )
 
-    return result, target_spatial, target_proj
+    time_coords: np.ndarray | None = None
+    if temporal_grouper is not None and time_groups:
+        time_coords = np.array(
+            [temporal_grouper.to_datetime64(key) for key in time_groups]
+        )
+
+    return result, target_spatial, target_proj, time_coords

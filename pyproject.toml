@@ -14,6 +14,7 @@ dependencies = [
     "obstore",
     "zarr-datafusion-search>=0.1.2",
     "geodatafusion",
+    "nest_asyncio",
 ]
 
 [project.optional-dependencies]

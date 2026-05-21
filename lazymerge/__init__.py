@@ -15,7 +15,12 @@ from lazymerge.sources import (
     ScanIndex as ScanIndex,
     SourceEntry as SourceEntry,
     query_datafusion_sources as query_datafusion_sources,
+    query_temporal_groups as query_temporal_groups,
     scan_store as scan_store,
     select_overview as select_overview,
 )
 from lazymerge.target import create_target as create_target, to_zarr as to_zarr
+from lazymerge.temporal import (
+    TemporalGrouper as TemporalGrouper,
+    grouper_from_period as grouper_from_period,
+)

@@ -1,6 +1,7 @@
 from unittest.mock import patch
 
 import numpy as np
+import pytest
 import zarr
 
 from lazymerge.conventions import ProjAttrs, SpatialAttrs, write_proj, write_spatial
@@ -94,7 +95,7 @@ def test_merge_two_adjacent_sources_same_crs():
     store, root = _make_same_crs_store()
     index = scan_store(root)
 
-    result_arr, result_spatial, result_proj = merge(
+    result_arr, result_spatial, result_proj, _ = merge(
         store=store,
         crs="EPSG:32618",
         bbox=(500000.0, 5999000.0, 502000.0, 6000000.0),
@@ -116,7 +117,7 @@ def test_merge_mixed_crs():
     store, root = _make_mixed_crs_store()
     index = scan_store(root)
 
-    result_arr, _, _ = merge(
+    result_arr, _, _, _ = merge(
         store=store,
         crs="EPSG:32618",
         bbox=(500000.0, 5999000.0, 502000.0, 6000000.0),
@@ -181,7 +182,7 @@ def test_merge_early_stop():
         return original_warp(*args, **kwargs)
 
     with patch("lazymerge.merge.warp_source_region", side_effect=counting_warp):
-        result_arr, _, _ = merge(
+        result_arr, _, _, _ = merge(
             store=store,
             crs="EPSG:32618",
             bbox=(500000.0, 5999000.0, 501000.0, 6000000.0),
@@ -204,7 +205,7 @@ def test_merge_no_sources():
     store, root = _make_same_crs_store()
     index = scan_store(root)
 
-    result_arr, _, _ = merge(
+    result_arr, _, _, _ = merge(
         store=store,
         crs="EPSG:32618",
         bbox=(600000.0, 5999000.0, 601000.0, 6000000.0),
@@ -306,7 +307,7 @@ def test_merge_with_band_uses_base_resolution():
         ))
     index = ScanIndex(entries)
 
-    result_arr, _, _ = merge(
+    result_arr, _, _, _ = merge(
         store=store,
         crs="EPSG:32618",
         bbox=(500000.0, 5999000.0, 502000.0, 6000000.0),
@@ -345,7 +346,7 @@ def test_merge_with_band_selects_overview():
     index = ScanIndex(entries)
 
     # Target at 20m resolution — should trigger overview selection (level 1)
-    result_arr, _, _ = merge(
+    result_arr, _, _, _ = merge(
         store=store,
         crs="EPSG:32618",
         bbox=(500000.0, 5999000.0, 502000.0, 6000000.0),
@@ -367,7 +368,7 @@ def test_merge_bands_none_preserves_behavior():
     store, root = _make_same_crs_store()
     index = scan_store(root)
 
-    result_arr, _, _ = merge(
+    result_arr, _, _, _ = merge(
         store=store,
         crs="EPSG:32618",
         bbox=(500000.0, 5999000.0, 502000.0, 6000000.0),
@@ -444,7 +445,7 @@ def test_merge_multi_band():
     store, root = _make_multiband_store()
     index = _make_multiband_index()
 
-    result_arr, _, _ = merge(
+    result_arr, _, _, _ = merge(
         store=store,
         crs="EPSG:32618",
         bbox=(500000.0, 5999000.0, 502000.0, 6000000.0),
@@ -469,7 +470,7 @@ def test_merge_single_band_list_stays_2d():
     store, root = _make_multiband_store()
     index = _make_multiband_index()
 
-    result_arr, _, _ = merge(
+    result_arr, _, _, _ = merge(
         store=store,
         crs="EPSG:32618",
         bbox=(500000.0, 5999000.0, 502000.0, 6000000.0),
@@ -490,7 +491,7 @@ def test_merge_single_band_string_stays_2d():
     store, root = _make_multiband_store()
     index = _make_multiband_index()
 
-    result_arr, _, _ = merge(
+    result_arr, _, _, _ = merge(
         store=store,
         crs="EPSG:32618",
         bbox=(500000.0, 5999000.0, 502000.0, 6000000.0),
@@ -504,3 +505,97 @@ def test_merge_single_band_string_stays_2d():
     assert data.shape == (100, 200)
     np.testing.assert_array_equal(data[:, :100], 1.0)
     np.testing.assert_array_equal(data[:, 100:], 2.0)
+
+
+def test_merge_temporal_grouping_requires_datafusion():
+    """temporal_grouping without datafusion=True should raise ValueError."""
+    store, root = _make_same_crs_store()
+    index = scan_store(root)
+
+    with pytest.raises(ValueError, match="temporal_grouping requires datafusion=True"):
+        merge(
+            store=store,
+            crs="EPSG:32618",
+            bbox=(500000.0, 5999000.0, 502000.0, 6000000.0),
+            resolution=10.0,
+            source_index=index,
+            temporal_grouping="P1D",
+        )
+
+
+def test_merge_temporal_grouping_creates_time_dimension():
+    """temporal_grouping should produce a 3D (time, y, x) output."""
+    store, root = _make_same_crs_store()
+
+    from lazymerge.sources import SourceEntry, ScanIndex
+
+    entries = []
+    for name, x_origin in [("source_a", 500000.0), ("source_b", 501000.0)]:
+        entries.append(SourceEntry(
+            path=name,
+            spatial_attrs=SpatialAttrs(
+                dimensions=["y", "x"],
+                transform=(10.0, 0.0, x_origin, 0.0, -10.0, 6000000.0),
+                bbox=(x_origin, 5999000.0, x_origin + 1000.0, 6000000.0),
+                shape=(100, 100),
+            ),
+            proj_attrs=ProjAttrs(code="EPSG:32618"),
+            chunk_shape=(50, 50),
+        ))
+
+    with patch("lazymerge.merge.query_temporal_groups", return_value=["2024-06", "2024-07"]), \
+         patch("lazymerge.merge.query_datafusion_sources", return_value=entries):
+        result_arr, _, _, time_coords = merge(
+            store=store,
+            crs="EPSG:32618",
+            bbox=(500000.0, 5999000.0, 502000.0, 6000000.0),
+            resolution=10.0,
+            chunk_size=(50, 50),
+            datafusion=True,
+            temporal_grouping="P1M",
+        )
+        data = result_arr.compute()
+
+    assert data.shape == (2, 100, 200)
+    assert time_coords is not None
+    np.testing.assert_array_equal(time_coords, [
+        np.datetime64("2024-06-01", "D"),
+        np.datetime64("2024-07-01", "D"),
+    ])
+
+
+def test_merge_temporal_grouping_with_bands():
+    """temporal_grouping + bands should produce a 4D (time, band, y, x) output."""
+    store, root = _make_multiband_store()
+
+    from lazymerge.sources import SourceEntry
+
+    entries = []
+    for name, x_origin in [("scene_a", 500000.0), ("scene_b", 501000.0)]:
+        entries.append(SourceEntry(
+            path=name,
+            spatial_attrs=SpatialAttrs(
+                dimensions=["y", "x"],
+                transform=(10.0, 0.0, x_origin, 0.0, -10.0, 6000000.0),
+                bbox=(x_origin, 5999000.0, x_origin + 1000.0, 6000000.0),
+                shape=(100, 100),
+            ),
+            proj_attrs=ProjAttrs(code="EPSG:32618"),
+            chunk_shape=(50, 50),
+        ))
+
+    with patch("lazymerge.merge.query_temporal_groups", return_value=["2024-06", "2024-07"]), \
+         patch("lazymerge.merge.query_datafusion_sources", return_value=entries):
+        result_arr, _, _, _ = merge(
+            store=store,
+            crs="EPSG:32618",
+            bbox=(500000.0, 5999000.0, 502000.0, 6000000.0),
+            resolution=10.0,
+            chunk_size=(50, 50),
+            datafusion=True,
+            temporal_grouping="P1M",
+            bands=["red", "green"],
+        )
+        data = result_arr.compute()
+
+    assert data.shape == (2, 2, 100, 200)
