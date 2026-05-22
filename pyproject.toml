@@ -1,6 +1,6 @@
 [project]
 name = "lazymerge"
-version = "0.1.0"
+version = "0.1.1"
 description = "Lazily merge geospatial Zarr arrays using Cubed"
 readme = "README.md"
 authors = [{ name = "Sean Harkins", email = "sean@developmentseed.org" }]
