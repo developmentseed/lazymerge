@@ -6,7 +6,7 @@ from lazymerge.target import create_target, to_zarr
 
 def test_create_target_shape():
     """Shape should be computed from bbox and resolution."""
-    arr, spatial, proj = create_target(
+    arr, _spatial, _proj = create_target(
         crs="EPSG:32618",
         bbox=(500000.0, 5999000.0, 501000.0, 6000000.0),
         resolution=10.0,
@@ -16,7 +16,7 @@ def test_create_target_shape():
 
 
 def test_create_target_chunks():
-    arr, spatial, proj = create_target(
+    arr, _spatial, _proj = create_target(
         crs="EPSG:32618",
         bbox=(500000.0, 5999000.0, 501000.0, 6000000.0),
         resolution=10.0,
@@ -26,7 +26,7 @@ def test_create_target_chunks():
 
 
 def test_create_target_spatial_attrs():
-    arr, spatial, proj = create_target(
+    _arr, spatial, _proj = create_target(
         crs="EPSG:32618",
         bbox=(500000.0, 5999000.0, 501000.0, 6000000.0),
         resolution=10.0,
@@ -38,7 +38,7 @@ def test_create_target_spatial_attrs():
 
 
 def test_create_target_proj_attrs():
-    arr, spatial, proj = create_target(
+    _arr, _spatial, proj = create_target(
         crs="EPSG:32618",
         bbox=(500000.0, 5999000.0, 501000.0, 6000000.0),
         resolution=10.0,
@@ -58,6 +58,7 @@ def test_to_zarr_writes_conventions():
 
     root = zarr.open_group(store, mode="r")
     out = root["output"]
+    assert isinstance(out, zarr.Array)
     assert out.shape == (100, 100)
 
     result_spatial = read_spatial(out)

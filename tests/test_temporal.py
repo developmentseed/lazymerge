@@ -1,6 +1,9 @@
+from unittest.mock import MagicMock, patch
+
 import numpy as np
 import pytest
 
+from lazymerge.sources import query_temporal_groups
 from lazymerge.temporal import grouper_from_period
 
 
@@ -164,32 +167,29 @@ class TestGrouperFromPeriod:
         assert key1 == key2
 
     def test_invalid_format(self):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Unsupported temporal grouping period"):
             grouper_from_period("invalid")
 
     def test_unsupported_duration(self):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Unsupported temporal grouping period"):
             grouper_from_period("PT1H")
-
-
-from unittest.mock import patch, MagicMock
 
 
 class TestQueryTemporalGroups:
     def test_groups_and_deduplicates(self):
         """query_temporal_groups should bucket datetimes and return sorted unique keys."""
-        from lazymerge.temporal import grouper_from_period
-        from lazymerge.sources import query_temporal_groups
-
         grouper = grouper_from_period("P1M")
 
         # Mock _run_async to return raw datetime strings (bypassing DataFusion)
-        with patch("lazymerge.sources._run_async", return_value=[
+        with patch(
+            "lazymerge.sources._run_async",
+            return_value=[
                 "2024-06-15T10:00:00Z",
                 "2024-06-20T10:00:00Z",  # same month as above — should dedup
                 "2024-07-01T10:00:00Z",
                 "2024-08-10T10:00:00Z",
-            ]):
+            ],
+        ):
             groups = query_temporal_groups(
                 store=MagicMock(),
                 bbox_4326=(-180, -90, 180, 90),

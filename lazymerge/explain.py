@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
+import math
 from collections import Counter
 from dataclasses import dataclass, field
 from typing import Any
@@ -26,7 +27,6 @@ from lazymerge.merge import (
 )
 from lazymerge.sources import (
     ScanIndex,
-    SourceEntry,
     query_datafusion_sources,
     select_overview,
 )
@@ -146,8 +146,7 @@ class ExplainPlan:
             f"Chunks:     {self.chunk_size[1]} x {self.chunk_size[0]} px"
             f" -> {n_x}x{n_y} spatial tiles",
             "",
-            f"Total chunk reads:      {self.total_chunk_reads}"
-            f" ({n_x}x{n_y} spatial tiles)",
+            f"Total chunk reads:      {self.total_chunk_reads} ({n_x}x{n_y} spatial tiles)",
             f"Total source reads:     {self.total_source_reads}",
             f"Chunks with 0 sources:  {zero:>4} {pct(zero)}",
             f"Chunks with 1 source:   {one:>4} {pct(one)}",
@@ -159,16 +158,16 @@ class ExplainPlan:
         if all_reads:
             lines.append(
                 f"Overview levels:        "
-                f"{'  '.join(f'{k}: {v}' for k, v in sorted(ovr_counts.items()))}"
+                f"{'  '.join(f'{k}: {v}' for k, v in sorted(ovr_counts.items()))}",
             )
             lines.append(f"Avg read window:        {avg_w:.0f} x {avg_h:.0f} px")
 
         return "\n".join(lines)
 
     def to_dataframe(self) -> Any:
-        from pandas import DataFrame
+        from pandas import DataFrame  # type: ignore[import-untyped]  # noqa: PLC0415
 
-        rows = []
+        rows: list[dict[str, Any]] = []
         for chunk in self.chunk_reads:
             base = {
                 "chunk_row": chunk.chunk_row,
@@ -210,7 +209,7 @@ class ExplainPlan:
                         "region_col_end": None,
                         "region_height": None,
                         "region_width": None,
-                    }
+                    },
                 )
         return DataFrame(rows)
 
@@ -226,7 +225,7 @@ def explain(
     bands: list[str] | str | None = None,
     datafusion: bool = False,
     sortby: str | None = None,
-    nodata: float | int | None = None,
+    nodata: float | None = None,
     sql_filter: str | None = None,
 ) -> ExplainPlan:
     """Dry-run a merge: report which source regions would be read per chunk.
@@ -234,8 +233,6 @@ def explain(
     Runs the same source-finding, overview-selection, and coordinate-mapping
     logic as ``merge``, but never reads pixel data.
     """
-    import math
-
     # Normalise bands to a list or None
     if isinstance(bands, str):
         bands_list: list[str] | None = [bands]
@@ -252,13 +249,13 @@ def explain(
         bbox=bbox,
         shape=(target_h, target_w),
     )
-    target_proj = ProjAttrs(code=crs)
+    ProjAttrs(code=crs)
     n_row_chunks = max(1, -(-target_h // chunk_size[0]))
     n_col_chunks = max(1, -(-target_w // chunk_size[1]))
 
     # Resolve zarr store once
     zarr_store: Any = store
-    if hasattr(store, "prefix") and not isinstance(store, zarr.abc.store.Store):
+    if hasattr(store, "prefix") and not isinstance(store, zarr.abc.store.Store):  # type: ignore[attr-defined]
         zarr_store = store.prefix
 
     chunk_reads: list[ChunkRead] = []
@@ -290,10 +287,16 @@ def explain(
                     asyncio.get_running_loop()
                     with concurrent.futures.ThreadPoolExecutor(1) as pool:
                         sources = pool.submit(
-                            query_datafusion_sources, store, bbox_4326, sortby=sortby, sql_filter=sql_filter
+                            query_datafusion_sources,
+                            store,
+                            bbox_4326,
+                            sortby=sortby,
+                            sql_filter=sql_filter,
                         ).result()
                 except RuntimeError:
-                    sources = query_datafusion_sources(store, bbox_4326, sortby=sortby, sql_filter=sql_filter)
+                    sources = query_datafusion_sources(
+                        store, bbox_4326, sortby=sortby, sql_filter=sql_filter
+                    )
             elif source_index is not None:
                 sources = source_index.find_intersecting_sources(cb, target_crs)
             else:
@@ -302,7 +305,7 @@ def explain(
             source_reads: list[SourceRead] = []
 
             # Determine which band names to iterate over for this chunk.
-            band_names = bands_list if bands_list is not None else [None]
+            band_names: list[str | None] = list(bands_list) if bands_list is not None else [None]
 
             for source_entry in sources:
                 src_crs = source_entry.proj_attrs.code or "EPSG:4326"
@@ -339,7 +342,9 @@ def explain(
                         base_array = _resolve_array(array_root, "0")
                         if base_array is not None:
                             base_spatial = _read_spatial_or_derive(
-                                base_array, source_entry.spatial_attrs, scale_factor=1.0
+                                base_array,
+                                source_entry.spatial_attrs,
+                                scale_factor=1.0,
                             )
                             native_res = abs(base_spatial.transform[0])
 
@@ -349,7 +354,9 @@ def explain(
                             target_res = abs(target_spatial.transform[0])
                             if target_crs != src_crs:
                                 transformer = Transformer.from_crs(
-                                    target_crs, src_crs, always_xy=True
+                                    target_crs,
+                                    src_crs,
+                                    always_xy=True,
                                 )
                                 cx = (cb[0] + cb[2]) / 2
                                 cy = (cb[1] + cb[3]) / 2
@@ -375,28 +382,34 @@ def explain(
                                     ovr_scale = ovr.scale[1]
                                     break
                         resolved_spatial = _read_spatial_or_derive(
-                            src_array, source_entry.spatial_attrs, scale_factor=ovr_scale
+                            src_array,
+                            source_entry.spatial_attrs,
+                            scale_factor=ovr_scale,
                         )
-                        resolved_proj = _read_proj_or_derive(
-                            src_array, source_entry.proj_attrs
+                        _read_proj_or_derive(
+                            src_array,
+                            source_entry.proj_attrs,
                         )
                         resolved_path = f"{source_entry.path}/{band}/{selected_path}"
                     else:
                         root = zarr.open_group(zarr_store, mode="r")
                         try:
-                            src_array = root[source_entry.path]
+                            src_node = root[source_entry.path]
                         except KeyError:
                             continue
-                        if not isinstance(src_array, zarr.Array):
+                        if not isinstance(src_node, zarr.Array):
                             continue
+                        src_array = src_node
                         resolved_spatial = source_entry.spatial_attrs
-                        resolved_proj = source_entry.proj_attrs
                         resolved_path = source_entry.path
 
                     # Compute target->source pixel mapping to find the read region
                     src_row_f, src_col_f = _target_to_source_pixels(
-                        chunk_transform, target_crs, actual_shape,
-                        resolved_spatial.transform, src_crs,
+                        chunk_transform,
+                        target_crs,
+                        actual_shape,
+                        resolved_spatial.transform,
+                        src_crs,
                     )
 
                     src_h = resolved_spatial.shape[0]
@@ -423,7 +436,7 @@ def explain(
                             region_row_end=r_max,
                             region_col_start=c_min,
                             region_col_end=c_max,
-                        )
+                        ),
                     )
 
             chunk_reads.append(
@@ -434,7 +447,7 @@ def explain(
                     chunk_width=actual_w,
                     chunk_bbox=cb,
                     source_reads=source_reads,
-                )
+                ),
             )
 
     return ExplainPlan(

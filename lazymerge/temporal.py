@@ -23,7 +23,7 @@ class TemporalGrouper(ABC):
         """Produce a datetime64[D] coordinate value for the group."""
 
     def _parse_date(self, datetime_str: str) -> date:
-        return datetime.fromisoformat(datetime_str.replace("Z", "+00:00")).date()
+        return datetime.fromisoformat(datetime_str).date()
 
 
 class _DayGrouper(TemporalGrouper):
@@ -68,10 +68,7 @@ class _MonthGrouper(TemporalGrouper):
     def datetime_filter(self, group_key: str) -> tuple[str, str]:
         year, month = (int(x) for x in group_key.split("-"))
         start_date = date(year, month, 1)
-        if month == 12:
-            end_date = date(year + 1, 1, 1)
-        else:
-            end_date = date(year, month + 1, 1)
+        end_date = date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)
         return f"{start_date.isoformat()}T00:00:00Z", f"{end_date.isoformat()}T00:00:00Z"
 
     def to_datetime64(self, group_key: str) -> np.datetime64:

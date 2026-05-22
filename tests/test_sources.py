@@ -1,7 +1,7 @@
 import zarr
 
-from lazymerge.conventions import ProjAttrs, SpatialAttrs, write_proj, write_spatial
-from lazymerge.sources import scan_store
+from lazymerge.conventions import OverviewLevel, ProjAttrs, SpatialAttrs, write_proj, write_spatial
+from lazymerge.sources import scan_store, select_overview
 
 
 def _make_source_store():
@@ -41,7 +41,7 @@ def _make_source_store():
 
 
 def test_scan_store_finds_all_sources():
-    store, root = _make_source_store()
+    _store, root = _make_source_store()
     index = scan_store(root)
     assert len(index.entries) == 2
     paths = {e.path for e in index.entries}
@@ -50,7 +50,7 @@ def test_scan_store_finds_all_sources():
 
 def test_find_intersecting_sources_full_overlap():
     """A target bbox covering both sources should return both."""
-    store, root = _make_source_store()
+    _store, root = _make_source_store()
     index = scan_store(root)
     results = index.find_intersecting_sources(
         target_bbox=(500000.0, 5999000.0, 502000.0, 6000000.0),
@@ -61,7 +61,7 @@ def test_find_intersecting_sources_full_overlap():
 
 def test_find_intersecting_sources_partial():
     """A target bbox covering only source_a's extent should return only source_a."""
-    store, root = _make_source_store()
+    _store, root = _make_source_store()
     index = scan_store(root)
     results = index.find_intersecting_sources(
         target_bbox=(500000.0, 5999000.0, 500500.0, 6000000.0),
@@ -73,14 +73,13 @@ def test_find_intersecting_sources_partial():
 
 def test_find_intersecting_sources_none():
     """A target bbox far away should return nothing."""
-    store, root = _make_source_store()
+    _store, root = _make_source_store()
     index = scan_store(root)
     results = index.find_intersecting_sources(
         target_bbox=(0.0, 0.0, 1.0, 1.0),
         target_crs="EPSG:32618",
     )
     assert len(results) == 0
-
 
 
 # --- Mixed CRS tests ---
@@ -129,7 +128,7 @@ def _make_mixed_crs_store():
 
 def test_scan_store_mixed_crs():
     """scan_store should find sources regardless of CRS."""
-    store, root = _make_mixed_crs_store()
+    _store, root = _make_mixed_crs_store()
     index = scan_store(root)
     assert len(index.entries) == 2
     crs_values = {e.proj_attrs.code for e in index.entries}
@@ -139,7 +138,7 @@ def test_scan_store_mixed_crs():
 def test_find_intersecting_sources_mixed_crs_both():
     """A target bbox in UTM 18N spanning both sources should find both,
     even though source_b is in UTM 17N."""
-    store, root = _make_mixed_crs_store()
+    _store, root = _make_mixed_crs_store()
     index = scan_store(root)
     results = index.find_intersecting_sources(
         target_bbox=(500000.0, 5999000.0, 502000.0, 6000000.0),
@@ -152,7 +151,7 @@ def test_find_intersecting_sources_mixed_crs_both():
 
 def test_find_intersecting_sources_mixed_crs_only_utm17n():
     """A target bbox that only overlaps the UTM 17N source should find only it."""
-    store, root = _make_mixed_crs_store()
+    _store, root = _make_mixed_crs_store()
     index = scan_store(root)
     # This bbox in UTM 18N covers ~x=[501500, 502000] — only source_b territory
     results = index.find_intersecting_sources(
@@ -165,18 +164,13 @@ def test_find_intersecting_sources_mixed_crs_only_utm17n():
 
 def test_find_intersecting_sources_mixed_crs_none():
     """A target bbox far from both sources should find nothing."""
-    store, root = _make_mixed_crs_store()
+    _store, root = _make_mixed_crs_store()
     index = scan_store(root)
     results = index.find_intersecting_sources(
         target_bbox=(600000.0, 5999000.0, 601000.0, 6000000.0),
         target_crs="EPSG:32618",
     )
     assert len(results) == 0
-
-
-
-from lazymerge.sources import select_overview
-from lazymerge.conventions import OverviewLevel
 
 
 def test_select_overview_no_overviews():

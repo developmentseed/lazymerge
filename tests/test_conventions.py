@@ -1,3 +1,4 @@
+import pytest
 import zarr
 
 from lazymerge.conventions import (
@@ -32,9 +33,7 @@ def test_proj_attrs_code():
 
 
 def test_proj_attrs_requires_at_least_one():
-    import pytest
-
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="at least one of"):
         ProjAttrs()
 
 
@@ -132,7 +131,7 @@ def test_read_multiscales_with_overviews():
                 "derived_from": "1",
                 "transform": {"scale": [2.0, 2.0], "translation": [0.5, 0.5]},
             },
-        ]
+        ],
     }
 
     overviews = read_multiscales(band_group)

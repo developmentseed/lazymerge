@@ -48,7 +48,7 @@ def warp_source_region(
     src_shape: tuple[int, int],
     target_shape: tuple[int, int],
     resampling: str = "nearest",
-    nodata: float | int | None = None,
+    nodata: float | None = None,
 ) -> np.ndarray:
     """Sample *src_array* at pre-computed source pixel coordinates.
 
@@ -59,13 +59,23 @@ def warp_source_region(
 
     Parameters
     ----------
-    src_array : 2-D array already read from the source.
-    src_row, src_col : fractional pixel coordinates (full-source space),
+    src_array : np.ndarray
+        2-D array already read from the source.
+    src_row : np.ndarray
+        Fractional row pixel coordinates (full-source space),
         already clipped to the region that was read.
-    src_shape : (height, width) of the *read* region (== src_array.shape).
-    target_shape : output shape.
-    resampling : resampling method (only "nearest" supported).
-    nodata : source fill value to treat as NaN.
+    src_col : np.ndarray
+        Fractional column pixel coordinates (full-source space),
+        already clipped to the region that was read.
+    src_shape : tuple[int, int]
+        (height, width) of the *read* region (== src_array.shape).
+    target_shape : tuple[int, int]
+        Output shape.
+    resampling : str
+        Resampling method (only "nearest" supported).
+    nodata : float | None
+        Source fill value to treat as NaN.
+
     """
     if resampling != "nearest":
         raise ValueError(f"Unsupported resampling method: {resampling}")
@@ -74,12 +84,7 @@ def warp_source_region(
     src_col_i = np.round(src_col).astype(int)
     src_row_i = np.round(src_row).astype(int)
 
-    valid = (
-        (src_col_i >= 0)
-        & (src_col_i < src_w)
-        & (src_row_i >= 0)
-        & (src_row_i < src_h)
-    )
+    valid = (src_col_i >= 0) & (src_col_i < src_w) & (src_row_i >= 0) & (src_row_i < src_h)
 
     out_dtype = src_array.dtype if np.issubdtype(src_array.dtype, np.floating) else np.float32
     output = np.full(target_shape, np.nan, dtype=out_dtype)

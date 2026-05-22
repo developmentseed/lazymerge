@@ -17,20 +17,94 @@ dependencies = [
     "nest_asyncio",
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
-    "pytest",
-    "ruff",
+    "pytest>=9.0.3",
+    "pre-commit>=4.6.0",
+    "ruff>=0.15.12",
     "mypy",
 ]
+docs = [
+    "mkdocs-material>=9.7.6",
+    "mkdocstrings[python]>=1.0.3",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-vv"
 
 [tool.ruff]
 line-length = 100
 
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "ANN002",  # missing type annotation for *args
+    "ANN003",  # missing type annotation for **kwargs
+    "ANN202",  # missing return type for private function
+    "ANN401",  # dynamically typed expressions (typing.Any)
+    "C901",    # function too complex
+    "COM812",  # conflicts with ruff formatter
+    "D100",    # missing docstring in public module
+    "D101",    # missing docstring in public class
+    "D102",    # missing docstring in public method
+    "D103",    # missing docstring in public function
+    "D104",    # missing docstring in public package
+    "D105",    # missing docstring in magic method
+    "D107",    # missing docstring in __init__
+    "D203",    # incompatible with D211
+    "D213",    # incompatible with D212
+    "EM101",   # raw string in exception
+    "EM102",   # f-string in exception
+    "FBT001",  # boolean typed positional argument
+    "FBT002",  # boolean default positional argument
+    "FIX002",  # todo statements
+    "PLR0912", # too many branches
+    "PLR0913", # too many arguments
+    "PLR0915", # too many statements
+    "PLR2004", # magic value in comparison
+    "PYI051",  # literal strings redundant with str in type union
+    "S608",    # possible SQL injection via string-based query
+    "TD002",   # todo without author name
+    "TRY003",  # define exceptions in the exception class
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = [
+    "ANN001",  # annotation in function argument
+    "ANN201",  # return type annotation
+    "PLR2004", # Magic value used in comparison
+    "S101",    # assert
+    "SLF001",  # private member access
+    "D",       # docstring
+]
+"lazymerge/merge.py" = [
+    "S101",    # assert used for mypy type narrowing
+]
+"demo.py" = [
+    "S101",    # assert
+]
+"docs/examples/*" = [
+    "A002",    # shadowing Python builtin
+    "ANN001",  # missing type annotation for argument
+    "ANN201",  # missing return type annotation
+]
+
 [tool.mypy]
 python_version = "3.12"
 strict = true
+warn_unused_ignores = false
 
 [[tool.mypy.overrides]]
-module = "cubed.*"
+module = "tests.*"
+disallow_untyped_defs = false
+disallow_untyped_calls = false
+
+[[tool.mypy.overrides]]
+module = [
+    "cubed.*",
+    "icechunk.*",
+    "nest_asyncio",
+    "zarr_datafusion_search.*",
+]
 ignore_missing_imports = true

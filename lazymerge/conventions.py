@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import zarr
 from zarr_cm import geo_proj, spatial
+
+if TYPE_CHECKING:
+    import zarr
 
 
 @dataclass(frozen=True)
@@ -79,7 +81,7 @@ def read_proj(node: zarr.Group | zarr.Array) -> ProjAttrs:  # type: ignore[type-
 
 
 def read_multiscales(
-    group: zarr.Group,  # type: ignore[type-arg]
+    group: zarr.Group,
     native_res: float | None = None,
 ) -> list[OverviewLevel] | None:
     """Parse the zarr multiscales convention from a group.
@@ -92,18 +94,20 @@ def read_multiscales(
         native_res: Base-level pixel resolution. If not provided, it is
             read from the base array referenced in the layout (which must
             be a direct child of *group*).
+
     """
     attrs = dict(group.attrs)
     if "multiscales" not in attrs:
         return None
 
-    layout = attrs["multiscales"]["layout"]
+    multiscales: Any = attrs["multiscales"]
+    layout: Any = multiscales["layout"]
     if len(layout) <= 1:
         return None
 
     if native_res is None:
         # Read base resolution from the first layout entry's array
-        base_path = layout[0]["asset"]
+        base_path: str = layout[0]["asset"]
         try:
             base_array = group[base_path]
             base_spatial = read_spatial(base_array)
@@ -117,15 +121,15 @@ def read_multiscales(
 
     for level in layout[1:]:
         scale = level["transform"]["scale"]
-        cumulative_scale_y *= scale[0]
-        cumulative_scale_x *= scale[1]
+        cumulative_scale_y *= float(scale[0])
+        cumulative_scale_x *= float(scale[1])
         resolution = native_res * cumulative_scale_x
         overviews.append(
             OverviewLevel(
-                path=level["asset"],
+                path=str(level["asset"]),
                 scale=(cumulative_scale_y, cumulative_scale_x),
                 resolution=resolution,
-            )
+            ),
         )
 
     return overviews

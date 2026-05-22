@@ -6,7 +6,7 @@ import zarr
 
 from lazymerge.conventions import ProjAttrs, SpatialAttrs, write_proj, write_spatial
 from lazymerge.merge import merge
-from lazymerge.sources import scan_store
+from lazymerge.sources import ScanIndex, SourceEntry, scan_store
 from lazymerge.warp import warp_source_region as real_warp_source_region
 
 
@@ -95,7 +95,7 @@ def test_merge_two_adjacent_sources_same_crs():
     store, root = _make_same_crs_store()
     index = scan_store(root)
 
-    result_arr, result_spatial, result_proj, _ = merge(
+    result_arr, _result_spatial, _result_proj, _ = merge(
         store=store,
         crs="EPSG:32618",
         bbox=(500000.0, 5999000.0, 502000.0, 6000000.0),
@@ -280,7 +280,7 @@ def _make_multiscale_store():
                     "derived_from": "0",
                     "transform": {"scale": [2.0, 2.0], "translation": [0.5, 0.5]},
                 },
-            ]
+            ],
         }
 
     return store, root
@@ -288,23 +288,24 @@ def _make_multiscale_store():
 
 def test_merge_with_band_uses_base_resolution():
     """When target res matches base (10m), merge should read from base arrays (level 0)."""
-    store, root = _make_multiscale_store()
+    store, _root = _make_multiscale_store()
 
-    from lazymerge.sources import SourceEntry, ScanIndex
 
     entries = []
     for name, x_origin in [("scene_a", 500000.0), ("scene_b", 501000.0)]:
-        entries.append(SourceEntry(
-            path=name,
-            spatial_attrs=SpatialAttrs(
-                dimensions=["y", "x"],
-                transform=(10.0, 0.0, x_origin, 0.0, -10.0, 6000000.0),
-                bbox=(x_origin, 5999000.0, x_origin + 1000.0, 6000000.0),
-                shape=(100, 100),
-            ),
-            proj_attrs=ProjAttrs(code="EPSG:32618"),
-            chunk_shape=(50, 50),
-        ))
+        entries.append(
+            SourceEntry(
+                path=name,
+                spatial_attrs=SpatialAttrs(
+                    dimensions=["y", "x"],
+                    transform=(10.0, 0.0, x_origin, 0.0, -10.0, 6000000.0),
+                    bbox=(x_origin, 5999000.0, x_origin + 1000.0, 6000000.0),
+                    shape=(100, 100),
+                ),
+                proj_attrs=ProjAttrs(code="EPSG:32618"),
+                chunk_shape=(50, 50),
+            )
+        )
     index = ScanIndex(entries)
 
     result_arr, _, _, _ = merge(
@@ -326,23 +327,24 @@ def test_merge_with_band_uses_base_resolution():
 
 def test_merge_with_band_selects_overview():
     """When target res is coarser than base, merge should select the appropriate overview."""
-    store, root = _make_multiscale_store()
+    store, _root = _make_multiscale_store()
 
-    from lazymerge.sources import SourceEntry, ScanIndex
 
     entries = []
     for name, x_origin in [("scene_a", 500000.0), ("scene_b", 501000.0)]:
-        entries.append(SourceEntry(
-            path=name,
-            spatial_attrs=SpatialAttrs(
-                dimensions=["y", "x"],
-                transform=(10.0, 0.0, x_origin, 0.0, -10.0, 6000000.0),
-                bbox=(x_origin, 5999000.0, x_origin + 1000.0, 6000000.0),
-                shape=(100, 100),
-            ),
-            proj_attrs=ProjAttrs(code="EPSG:32618"),
-            chunk_shape=(50, 50),
-        ))
+        entries.append(
+            SourceEntry(
+                path=name,
+                spatial_attrs=SpatialAttrs(
+                    dimensions=["y", "x"],
+                    transform=(10.0, 0.0, x_origin, 0.0, -10.0, 6000000.0),
+                    bbox=(x_origin, 5999000.0, x_origin + 1000.0, 6000000.0),
+                    shape=(100, 100),
+                ),
+                proj_attrs=ProjAttrs(code="EPSG:32618"),
+                chunk_shape=(50, 50),
+            )
+        )
     index = ScanIndex(entries)
 
     # Target at 20m resolution — should trigger overview selection (level 1)
@@ -422,27 +424,28 @@ def _make_multiband_store():
 
 
 def _make_multiband_index():
-    from lazymerge.sources import SourceEntry, ScanIndex
 
     entries = []
     for name, x_origin in [("scene_a", 500000.0), ("scene_b", 501000.0)]:
-        entries.append(SourceEntry(
-            path=name,
-            spatial_attrs=SpatialAttrs(
-                dimensions=["y", "x"],
-                transform=(10.0, 0.0, x_origin, 0.0, -10.0, 6000000.0),
-                bbox=(x_origin, 5999000.0, x_origin + 1000.0, 6000000.0),
-                shape=(100, 100),
-            ),
-            proj_attrs=ProjAttrs(code="EPSG:32618"),
-            chunk_shape=(50, 50),
-        ))
+        entries.append(
+            SourceEntry(
+                path=name,
+                spatial_attrs=SpatialAttrs(
+                    dimensions=["y", "x"],
+                    transform=(10.0, 0.0, x_origin, 0.0, -10.0, 6000000.0),
+                    bbox=(x_origin, 5999000.0, x_origin + 1000.0, 6000000.0),
+                    shape=(100, 100),
+                ),
+                proj_attrs=ProjAttrs(code="EPSG:32618"),
+                chunk_shape=(50, 50),
+            )
+        )
     return ScanIndex(entries)
 
 
 def test_merge_multi_band():
     """Multiple bands produce a 3D (band, y, x) output."""
-    store, root = _make_multiband_store()
+    store, _root = _make_multiband_store()
     index = _make_multiband_index()
 
     result_arr, _, _, _ = merge(
@@ -467,7 +470,7 @@ def test_merge_multi_band():
 
 def test_merge_single_band_list_stays_2d():
     """A single-element bands list produces 2D output (no band dimension)."""
-    store, root = _make_multiband_store()
+    store, _root = _make_multiband_store()
     index = _make_multiband_index()
 
     result_arr, _, _, _ = merge(
@@ -488,7 +491,7 @@ def test_merge_single_band_list_stays_2d():
 
 def test_merge_single_band_string_stays_2d():
     """A string bands value produces 2D output (backward compat)."""
-    store, root = _make_multiband_store()
+    store, _root = _make_multiband_store()
     index = _make_multiband_index()
 
     result_arr, _, _, _ = merge(
@@ -525,26 +528,30 @@ def test_merge_temporal_grouping_requires_datafusion():
 
 def test_merge_temporal_grouping_creates_time_dimension():
     """temporal_grouping should produce a 3D (time, y, x) output."""
-    store, root = _make_same_crs_store()
+    store, _root = _make_same_crs_store()
 
-    from lazymerge.sources import SourceEntry, ScanIndex
+
 
     entries = []
     for name, x_origin in [("source_a", 500000.0), ("source_b", 501000.0)]:
-        entries.append(SourceEntry(
-            path=name,
-            spatial_attrs=SpatialAttrs(
-                dimensions=["y", "x"],
-                transform=(10.0, 0.0, x_origin, 0.0, -10.0, 6000000.0),
-                bbox=(x_origin, 5999000.0, x_origin + 1000.0, 6000000.0),
-                shape=(100, 100),
-            ),
-            proj_attrs=ProjAttrs(code="EPSG:32618"),
-            chunk_shape=(50, 50),
-        ))
+        entries.append(
+            SourceEntry(
+                path=name,
+                spatial_attrs=SpatialAttrs(
+                    dimensions=["y", "x"],
+                    transform=(10.0, 0.0, x_origin, 0.0, -10.0, 6000000.0),
+                    bbox=(x_origin, 5999000.0, x_origin + 1000.0, 6000000.0),
+                    shape=(100, 100),
+                ),
+                proj_attrs=ProjAttrs(code="EPSG:32618"),
+                chunk_shape=(50, 50),
+            )
+        )
 
-    with patch("lazymerge.merge.query_temporal_groups", return_value=["2024-06", "2024-07"]), \
-         patch("lazymerge.merge.query_datafusion_sources", return_value=entries):
+    with (
+        patch("lazymerge.merge.query_temporal_groups", return_value=["2024-06", "2024-07"]),
+        patch("lazymerge.merge.query_datafusion_sources", return_value=entries),
+    ):
         result_arr, _, _, time_coords = merge(
             store=store,
             crs="EPSG:32618",
@@ -558,34 +565,41 @@ def test_merge_temporal_grouping_creates_time_dimension():
 
     assert data.shape == (2, 100, 200)
     assert time_coords is not None
-    np.testing.assert_array_equal(time_coords, [
-        np.datetime64("2024-06-01", "D"),
-        np.datetime64("2024-07-01", "D"),
-    ])
+    np.testing.assert_array_equal(
+        time_coords,
+        [
+            np.datetime64("2024-06-01", "D"),
+            np.datetime64("2024-07-01", "D"),
+        ],
+    )
 
 
 def test_merge_temporal_grouping_with_bands():
     """temporal_grouping + bands should produce a 4D (time, band, y, x) output."""
-    store, root = _make_multiband_store()
+    store, _root = _make_multiband_store()
 
-    from lazymerge.sources import SourceEntry
+
 
     entries = []
     for name, x_origin in [("scene_a", 500000.0), ("scene_b", 501000.0)]:
-        entries.append(SourceEntry(
-            path=name,
-            spatial_attrs=SpatialAttrs(
-                dimensions=["y", "x"],
-                transform=(10.0, 0.0, x_origin, 0.0, -10.0, 6000000.0),
-                bbox=(x_origin, 5999000.0, x_origin + 1000.0, 6000000.0),
-                shape=(100, 100),
-            ),
-            proj_attrs=ProjAttrs(code="EPSG:32618"),
-            chunk_shape=(50, 50),
-        ))
+        entries.append(
+            SourceEntry(
+                path=name,
+                spatial_attrs=SpatialAttrs(
+                    dimensions=["y", "x"],
+                    transform=(10.0, 0.0, x_origin, 0.0, -10.0, 6000000.0),
+                    bbox=(x_origin, 5999000.0, x_origin + 1000.0, 6000000.0),
+                    shape=(100, 100),
+                ),
+                proj_attrs=ProjAttrs(code="EPSG:32618"),
+                chunk_shape=(50, 50),
+            )
+        )
 
-    with patch("lazymerge.merge.query_temporal_groups", return_value=["2024-06", "2024-07"]), \
-         patch("lazymerge.merge.query_datafusion_sources", return_value=entries):
+    with (
+        patch("lazymerge.merge.query_temporal_groups", return_value=["2024-06", "2024-07"]),
+        patch("lazymerge.merge.query_datafusion_sources", return_value=entries),
+    ):
         result_arr, _, _, _ = merge(
             store=store,
             crs="EPSG:32618",

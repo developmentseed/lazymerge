@@ -4,6 +4,21 @@ import asyncio
 from dataclasses import dataclass
 from typing import Any, TypeVar, cast
 
+import nest_asyncio
+import zarr
+from datafusion import SessionContext
+from geodatafusion import register_all
+from pyproj import Transformer
+from zarr_datafusion_search import ZarrTable
+
+from lazymerge.conventions import (
+    OverviewLevel,
+    ProjAttrs,
+    SpatialAttrs,
+    read_proj,
+    read_spatial,
+)
+
 T = TypeVar("T")
 
 
@@ -13,20 +28,9 @@ def _run_async(coro: Any) -> Any:
         loop = asyncio.get_running_loop()
     except RuntimeError:
         return asyncio.run(coro)
-    import nest_asyncio
+
     nest_asyncio.apply(loop)
     return loop.run_until_complete(coro)
-
-import zarr
-from pyproj import Transformer
-
-from lazymerge.conventions import (
-    OverviewLevel,
-    ProjAttrs,
-    SpatialAttrs,
-    read_proj,
-    read_spatial,
-)
 
 Bbox = tuple[float, float, float, float]
 
@@ -71,6 +75,7 @@ def select_overview(
 
     Returns:
         An OverviewLevel, or None to use full resolution.
+
     """
     if not overviews:
         return None
@@ -96,7 +101,9 @@ class ScanIndex:
         if cache_key not in self._reprojected_bboxes:
             src_crs = entry.proj_attrs.code or "EPSG:4326"
             self._reprojected_bboxes[cache_key] = _reproject_bbox(
-                cast(Bbox, entry.spatial_attrs.bbox), src_crs, target_crs
+                cast("Bbox", entry.spatial_attrs.bbox),
+                src_crs,
+                target_crs,
             )
         return self._reprojected_bboxes[cache_key]
 
@@ -113,7 +120,6 @@ class ScanIndex:
         return results
 
 
-
 def scan_store(root: zarr.Group) -> ScanIndex:
     entries: list[SourceEntry] = []
     for name, item in root.members():
@@ -123,12 +129,14 @@ def scan_store(root: zarr.Group) -> ScanIndex:
                 pa = read_proj(item)
             except KeyError:
                 continue
-            entries.append(SourceEntry(
-                path=name,
-                spatial_attrs=sa,
-                proj_attrs=pa,
-                chunk_shape=tuple(item.chunks),
-            ))
+            entries.append(
+                SourceEntry(
+                    path=name,
+                    spatial_attrs=sa,
+                    proj_attrs=pa,
+                    chunk_shape=tuple(item.chunks),
+                )
+            )
     return ScanIndex(entries)
 
 
@@ -138,7 +146,7 @@ def query_datafusion_sources(
     sortby: str | None = None,
     sql_filter: str | None = None,
 ) -> list[SourceEntry]:
-    """Query the /meta group via DataFusion for sources intersecting bbox_4326.
+    r"""Query the /meta group via DataFusion for sources intersecting bbox_4326.
 
     Issues a spatial SQL query against the /meta columnar arrays. Only sources
     whose bbox (stored in EPSG:4326) intersects the query bbox are returned.
@@ -157,18 +165,18 @@ def query_datafusion_sources(
     Returns:
         List of SourceEntry objects for matching sources. chunk_shape is set
         to a placeholder (0, 0) since it is resolved from the actual array.
+
     """
-    from datafusion import SessionContext
-    from geodatafusion import register_all
-    from zarr_datafusion_search import ZarrTable
 
     async def _query() -> list[SourceEntry]:
         # Detect Icechunk stores and use the appropriate constructor
         try:
-            from icechunk import IcechunkStore
+            from icechunk import IcechunkStore  # noqa: PLC0415
+
             if isinstance(store, IcechunkStore):
                 zarr_table = await ZarrTable.from_icechunk(
-                    session=store.session, group_path="/meta"
+                    session=store.session,
+                    group_path="/meta",
                 )
             else:
                 zarr_table = await ZarrTable.from_obstore(store, "/meta")
@@ -181,13 +189,14 @@ def query_datafusion_sources(
 
         xmin, ymin, xmax, ymax = bbox_4326
         query = (
-            "SELECT id, \"proj:epsg\", "
+            'SELECT id, "proj:epsg", '
             "transform_0, transform_1, transform_2, "
             "transform_3, transform_4, transform_5, "
             "shape_x, shape_y "
             "FROM meta "
             "WHERE ST_Intersects(bbox, ST_GeomFromText("
-            f"'POLYGON(({xmin} {ymin}, {xmax} {ymin}, {xmax} {ymax}, {xmin} {ymax}, {xmin} {ymin}))'"
+            f"'POLYGON(({xmin} {ymin}, {xmax} {ymin}, "
+            f"{xmax} {ymax}, {xmin} {ymax}, {xmin} {ymin}))'"
             "))"
         )
         if sql_filter is not None:
@@ -224,15 +233,18 @@ def query_datafusion_sources(
                     shape=(sy, sx),
                 )
                 pa = ProjAttrs(code=f"EPSG:{epsg}")
-                entries.append(SourceEntry(
-                    path=str(batch.column("id")[i].as_py()),
-                    spatial_attrs=sa,
-                    proj_attrs=pa,
-                    chunk_shape=(0, 0),
-                ))
+                entries.append(
+                    SourceEntry(
+                        path=str(batch.column("id")[i].as_py()),
+                        spatial_attrs=sa,
+                        proj_attrs=pa,
+                        chunk_shape=(0, 0),
+                    )
+                )
         return entries
 
-    return _run_async(_query())
+    result: list[SourceEntry] = _run_async(_query())
+    return result
 
 
 def query_temporal_groups(
@@ -251,17 +263,17 @@ def query_temporal_groups(
 
     Returns:
         Sorted list of unique group keys.
+
     """
-    from datafusion import SessionContext
-    from geodatafusion import register_all
-    from zarr_datafusion_search import ZarrTable
 
     async def _query() -> list[str]:
         try:
-            from icechunk import IcechunkStore
+            from icechunk import IcechunkStore  # noqa: PLC0415
+
             if isinstance(store, IcechunkStore):
                 zarr_table = await ZarrTable.from_icechunk(
-                    session=store.session, group_path="/meta"
+                    session=store.session,
+                    group_path="/meta",
                 )
             else:
                 zarr_table = await ZarrTable.from_obstore(store, "/meta")
@@ -277,7 +289,8 @@ def query_temporal_groups(
             "SELECT DISTINCT datetime "
             "FROM meta "
             "WHERE ST_Intersects(bbox, ST_GeomFromText("
-            f"'POLYGON(({xmin} {ymin}, {xmax} {ymin}, {xmax} {ymax}, {xmin} {ymax}, {xmin} {ymin}))'"
+            f"'POLYGON(({xmin} {ymin}, {xmax} {ymin}, "
+            f"{xmax} {ymax}, {xmin} {ymax}, {xmin} {ymin}))'"
             "))"
         )
         if sql_filter is not None:
@@ -286,12 +299,12 @@ def query_temporal_groups(
         df = ctx.sql(query)
         batches = df.collect()
 
-        datetimes: list[str] = []
-        for batch in batches:
-            for i in range(batch.num_rows):
-                datetimes.append(str(batch.column("datetime")[i].as_py()))
+        datetimes: list[str] = [
+            str(batch.column("datetime")[i].as_py())
+            for batch in batches
+            for i in range(batch.num_rows)
+        ]
         return datetimes
 
     datetimes = _run_async(_query())
-    keys = sorted(set(grouper.group_key(dt) for dt in datetimes))
-    return keys
+    return sorted({grouper.group_key(dt) for dt in datetimes})

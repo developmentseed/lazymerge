@@ -2,20 +2,33 @@ from __future__ import annotations
 
 from typing import Any
 
+import cubed
 import numpy as np
 import zarr
-import cubed
-
 from pyproj import Transformer
 
-from lazymerge.conventions import SpatialAttrs, ProjAttrs, chunk_bbox, read_multiscales, read_spatial, read_proj
-from lazymerge.sources import ScanIndex, SourceEntry, select_overview, query_datafusion_sources, query_temporal_groups
+from lazymerge.conventions import (
+    ProjAttrs,
+    SpatialAttrs,
+    chunk_bbox,
+    read_multiscales,
+    read_proj,
+    read_spatial,
+)
+from lazymerge.sources import (
+    ScanIndex,
+    SourceEntry,
+    query_datafusion_sources,
+    query_temporal_groups,
+    select_overview,
+)
+from lazymerge.target import create_target
 from lazymerge.temporal import TemporalGrouper, grouper_from_period
 from lazymerge.warp import _target_to_source_pixels, warp_source_region
 
 
 def _read_spatial_or_derive(
-    node: zarr.Array,
+    node: zarr.Array,  # type: ignore[type-arg]
     source_spatial: SpatialAttrs,
     scale_factor: float = 1.0,
 ) -> SpatialAttrs:
@@ -40,7 +53,7 @@ def _read_spatial_or_derive(
 
 
 def _read_proj_or_derive(
-    node: zarr.Array,
+    node: zarr.Array,  # type: ignore[type-arg]
     source_proj: ProjAttrs,
 ) -> ProjAttrs:
     """Read proj attrs from node, falling back to source_proj if missing."""
@@ -50,7 +63,7 @@ def _read_proj_or_derive(
         return source_proj
 
 
-def _resolve_array(group: zarr.Group, path: str) -> zarr.Array | None:
+def _resolve_array(group: zarr.Group, path: str) -> zarr.Array | None:  # type: ignore[type-arg]
     """Navigate to an array, handling VirtualiZarr's group-wrapping pattern.
 
     VirtualiZarr wraps arrays in a group of the same name, so level "0"
@@ -103,7 +116,7 @@ def _merge_block(
     bands: list[str] | None = None,
     datafusion: bool = False,
     sortby: str | None = None,
-    nodata: float | int | None = None,
+    nodata: float | None = None,
     sql_filter: str | None = None,
     temporal_grouper: TemporalGrouper | None = None,
     time_groups: list[str] | None = None,
@@ -121,7 +134,9 @@ def _merge_block(
     time_idx: int | None = None
     if has_time:
         time_idx = idx.pop(0)
+    band: str | None
     if multi_band:
+        assert bands is not None
         band_idx = idx.pop(0)
         band = bands[band_idx]
     else:
@@ -153,6 +168,8 @@ def _merge_block(
     # Build effective SQL filter combining user filter + temporal filter
     effective_sql_filter = sql_filter
     if has_time and time_idx is not None:
+        assert time_groups is not None
+        assert temporal_grouper is not None
         group_key = time_groups[time_idx]
         t_start, t_end = temporal_grouper.datetime_filter(group_key)
         temporal_clause = f"\"datetime\" >= '{t_start}' AND \"datetime\" < '{t_end}'"
@@ -164,7 +181,9 @@ def _merge_block(
     # Pass 1: find intersecting sources
     if datafusion:
         bbox_4326 = _reproject_bbox_to_4326(cb, target_crs)
-        sources = query_datafusion_sources(store, bbox_4326, sortby=sortby, sql_filter=effective_sql_filter)
+        sources = query_datafusion_sources(
+            store, bbox_4326, sortby=sortby, sql_filter=effective_sql_filter
+        )
     elif source_index is not None:
         sources = source_index.find_intersecting_sources(cb, target_crs)
     else:
@@ -176,7 +195,7 @@ def _merge_block(
     # Resolve a zarr-compatible store for reading arrays.
     # obstore LocalStore isn't zarr-compatible, so use its path instead.
     zarr_store: Any = store
-    if hasattr(store, "prefix") and not isinstance(store, zarr.abc.store.Store):
+    if hasattr(store, "prefix") and not isinstance(store, zarr.abc.store.Store):  # type: ignore[attr-defined]
         zarr_store = store.prefix
 
     unfilled = int(np.count_nonzero(np.isnan(output)))
@@ -213,7 +232,9 @@ def _merge_block(
             native_res: float | None = None
             if base_array is not None:
                 base_spatial = _read_spatial_or_derive(
-                    base_array, source_entry.spatial_attrs, scale_factor=1.0
+                    base_array,
+                    source_entry.spatial_attrs,
+                    scale_factor=1.0,
                 )
                 native_res = abs(base_spatial.transform[0])
 
@@ -226,7 +247,9 @@ def _merge_block(
                 target_res = abs(target_spatial.transform[0])
                 if target_crs != src_crs:
                     transformer = Transformer.from_crs(
-                        target_crs, src_crs, always_xy=True
+                        target_crs,
+                        src_crs,
+                        always_xy=True,
                     )
                     cx = (cb[0] + cb[2]) / 2
                     cy = (cb[1] + cb[3]) / 2
@@ -256,7 +279,9 @@ def _merge_block(
                         ovr_scale = ovr.scale[1]
                         break
             resolved_spatial = _read_spatial_or_derive(
-                src_array, source_entry.spatial_attrs, scale_factor=ovr_scale
+                src_array,
+                source_entry.spatial_attrs,
+                scale_factor=ovr_scale,
             )
             resolved_proj = _read_proj_or_derive(src_array, source_entry.proj_attrs)
             resolved_chunk_shape = tuple(src_array.chunks)
@@ -267,15 +292,19 @@ def _merge_block(
                 chunk_shape=resolved_chunk_shape,
             )
         else:
-            src_array = root[source_entry.path]
-            if not isinstance(src_array, zarr.Array):
+            src_node = root[source_entry.path]
+            if not isinstance(src_node, zarr.Array):
                 continue
+            src_array = src_node
             resolved_entry = source_entry
 
         # Compute target→source pixel mapping once for this source
         src_row_f, src_col_f = _target_to_source_pixels(
-            chunk_transform, target_crs, actual_shape,
-            resolved_entry.spatial_attrs.transform, src_crs,
+            chunk_transform,
+            target_crs,
+            actual_shape,
+            resolved_entry.spatial_attrs.transform,
+            src_crs,
         )
 
         # Determine the bounding pixel range needed from the source
@@ -320,13 +349,11 @@ def merge(
     bands: list[str] | str | None = None,
     datafusion: bool = False,
     sortby: str | None = None,
-    nodata: float | int | None = None,
+    nodata: float | None = None,
     sql_filter: str | None = None,
     dtype: str = "float32",
     temporal_grouping: str | None = None,
 ) -> tuple[cubed.Array, SpatialAttrs, ProjAttrs, np.ndarray | None]:
-    from lazymerge.target import create_target
-
     # Normalise bands to a list or None
     if isinstance(bands, str):
         bands_list: list[str] | None = [bands]
@@ -341,12 +368,18 @@ def merge(
         temporal_grouper = grouper_from_period(temporal_grouping)
         bbox_4326 = _reproject_bbox_to_4326(bbox, crs)
         time_groups = query_temporal_groups(
-            store, bbox_4326, temporal_grouper, sql_filter=sql_filter,
+            store,
+            bbox_4326,
+            temporal_grouper,
+            sql_filter=sql_filter,
         )
 
     target, target_spatial, target_proj = create_target(
-        crs=crs, bbox=bbox, resolution=resolution,
-        chunk_size=chunk_size, dtype=dtype,
+        crs=crs,
+        bbox=bbox,
+        resolution=resolution,
+        chunk_size=chunk_size,
+        dtype=dtype,
     )
 
     # Prepend extra dimensions as needed
@@ -354,26 +387,26 @@ def merge(
     has_time = time_groups is not None and len(time_groups) > 0
 
     if has_time and multi_band:
-        n_times = len(time_groups)
-        n_bands = len(bands_list)
+        assert time_groups is not None
+        assert bands_list is not None
         target = cubed.full(
-            shape=(n_times, n_bands, *target.shape),
+            shape=(len(time_groups), len(bands_list), *target.shape),
             fill_value=float("nan"),
             dtype=target.dtype,
             chunks=(1, 1, *target.chunksize),
         )
     elif has_time:
-        n_times = len(time_groups)
+        assert time_groups is not None
         target = cubed.full(
-            shape=(n_times, *target.shape),
+            shape=(len(time_groups), *target.shape),
             fill_value=float("nan"),
             dtype=target.dtype,
             chunks=(1, *target.chunksize),
         )
     elif multi_band:
-        n_bands = len(bands_list)
+        assert bands_list is not None
         target = cubed.full(
-            shape=(n_bands, *target.shape),
+            shape=(len(bands_list), *target.shape),
             fill_value=float("nan"),
             dtype=target.dtype,
             chunks=(1, *target.chunksize),
@@ -402,7 +435,7 @@ def merge(
     time_coords: np.ndarray | None = None
     if temporal_grouper is not None and time_groups:
         time_coords = np.array(
-            [temporal_grouper.to_datetime64(key) for key in time_groups]
+            [temporal_grouper.to_datetime64(key) for key in time_groups],
         )
 
     return result, target_spatial, target_proj, time_coords

@@ -1,0 +1,30 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.12
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.16.0
+    hooks:
+      - id: mypy
+        additional_dependencies:
+          - zarr>=3.0
+          - zarr-cm
+          - cubed
+          - pyproj
+          - numpy
+          - obstore
+          - zarr-datafusion-search>=0.1.2
+          - geodatafusion
+          - nest_asyncio
+          - pytest>=9.0.3
+        args: [lazymerge/, tests/]
+        pass_filenames: false
+
+  - repo: https://github.com/tsvikas/sync-with-uv
+    rev: v0.5.0
+    hooks:
+      - id: sync-with-uv
