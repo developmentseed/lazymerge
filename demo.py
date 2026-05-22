@@ -133,6 +133,5 @@ def main() -> None:
     assert val_bottom_right == 200.0, f"Expected 200.0, got {val_bottom_right}"
 
 
-
 if __name__ == "__main__":
     main()

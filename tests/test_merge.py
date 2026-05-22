@@ -290,7 +290,6 @@ def test_merge_with_band_uses_base_resolution():
     """When target res matches base (10m), merge should read from base arrays (level 0)."""
     store, _root = _make_multiscale_store()
 
-
     entries = []
     for name, x_origin in [("scene_a", 500000.0), ("scene_b", 501000.0)]:
         entries.append(
@@ -328,7 +327,6 @@ def test_merge_with_band_uses_base_resolution():
 def test_merge_with_band_selects_overview():
     """When target res is coarser than base, merge should select the appropriate overview."""
     store, _root = _make_multiscale_store()
-
 
     entries = []
     for name, x_origin in [("scene_a", 500000.0), ("scene_b", 501000.0)]:
@@ -530,8 +528,6 @@ def test_merge_temporal_grouping_creates_time_dimension():
     """temporal_grouping should produce a 3D (time, y, x) output."""
     store, _root = _make_same_crs_store()
 
-
-
     entries = []
     for name, x_origin in [("source_a", 500000.0), ("source_b", 501000.0)]:
         entries.append(
@@ -577,8 +573,6 @@ def test_merge_temporal_grouping_creates_time_dimension():
 def test_merge_temporal_grouping_with_bands():
     """temporal_grouping + bands should produce a 4D (time, band, y, x) output."""
     store, _root = _make_multiband_store()
-
-
 
     entries = []
     for name, x_origin in [("scene_a", 500000.0), ("scene_b", 501000.0)]:

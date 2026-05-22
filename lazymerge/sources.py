@@ -32,6 +32,7 @@ def _run_async(coro: Any) -> Any:
     nest_asyncio.apply(loop)
     return loop.run_until_complete(coro)
 
+
 Bbox = tuple[float, float, float, float]
 
 
