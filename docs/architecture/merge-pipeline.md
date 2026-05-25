@@ -17,6 +17,11 @@ The pipeline has three phases:
    reproject them to the target grid, and composite them into the output
    chunk.
 
+<p align="center">
+  <img src="../merge-pipeline-diagram.png" alt="Merge pipeline diagram" width="600">
+</p>
+
+
 ## Target grid
 
 `merge()` creates a target grid from the user-provided CRS, bounding box,
