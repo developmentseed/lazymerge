@@ -26,6 +26,7 @@ dev = [
 ]
 docs = [
     "mkdocs-material>=9.7.6",
+    "mkdocs-jupyter>=0.25.1",
     "mkdocstrings[python]>=1.0.3",
 ]
 
@@ -35,6 +36,7 @@ addopts = "-vv"
 
 [tool.ruff]
 line-length = 100
+exclude = ["site", ".ipynb_checkpoints"]
 
 [tool.ruff.lint]
 select = ["ALL"]

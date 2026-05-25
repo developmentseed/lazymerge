@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/logo.png" alt="lazymerge" width="400">
+  <img src="assets/logo.png" alt="lazymerge" width="400">
 </p>
 
 # lazymerge
@@ -59,37 +59,9 @@ workflows that lazycogs provides can be achieved with Zarr.
 - **Dry-run explain plans** -- inspect which source regions would be read
   per output chunk without touching pixel data.
 
-## Installation
+## Quick links
 
-```bash
-uv add lazymerge
-```
-
-## Quick start
-
-```python
-import zarr
-from lazymerge import merge, scan_store
-
-root = zarr.open_group("my_data.zarr", mode="r")
-index = scan_store(root)
-
-result, spatial, proj, _ = merge(
-    store=zarr.storage.LocalStore("my_data.zarr"),
-    crs="EPSG:32618",
-    bbox=(500000.0, 5999000.0, 502000.0, 6000000.0),
-    resolution=10.0,
-    source_index=index,
-)
-
-data = result.compute()
-```
-
-## Documentation
-
-Full documentation is available at
-[developmentseed.github.io/lazymerge](https://developmentseed.github.io/lazymerge/).
-
-## License
-
-See [LICENSE](LICENSE) for details.
+- **[User Guide](user-guide/installation.md)** -- Installation, quickstart
+- **[API Reference](api/merge.md)** -- Function and class documentation
+- **[Architecture](architecture/merge-pipeline.md)** -- How the merge pipeline works
+- **[Developer Docs](DEVELOP.md)** -- Contributing and development setup
