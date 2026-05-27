@@ -1280,6 +1280,10 @@
         <p>Query the /meta group via DataFusion for sources intersecting bbox_4326.</p>
 <p>Issues a spatial SQL query against the /meta columnar arrays. Only sources
 whose bbox (stored in EPSG:4326) intersects the query bbox are returned.</p>
+<p>When the DataFusion schema includes <code>transform_0..5</code> and <code>shape_x/y</code>
+columns, spatial metadata is read directly from the query results.
+Otherwise, it falls back to reading zarr group conventions for each
+matched source.</p>
 <p>Args:
     store: An obstore-compatible object store (e.g. LocalStore, S3Store),
         an Icechunk Session, or a zarr Store backed by Icechunk.
