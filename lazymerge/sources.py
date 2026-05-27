@@ -141,6 +141,66 @@ def scan_store(root: zarr.Group) -> ScanIndex:
     return ScanIndex(entries)
 
 
+def _has_columns(ctx: SessionContext, table: str, columns: list[str]) -> bool:
+    """Check whether *table* registered in *ctx* contains all *columns*."""
+    schema = ctx.table(table).schema()
+    field_names = {schema.field(i).name for i in range(len(schema))}
+    return all(c in field_names for c in columns)
+
+
+def _entry_from_columns(batch: Any, i: int) -> SourceEntry:
+    """Build a SourceEntry from DataFusion columns that include transform/shape."""
+    transform = (
+        float(batch.column("transform_0")[i].as_py()),
+        float(batch.column("transform_1")[i].as_py()),
+        float(batch.column("transform_2")[i].as_py()),
+        float(batch.column("transform_3")[i].as_py()),
+        float(batch.column("transform_4")[i].as_py()),
+        float(batch.column("transform_5")[i].as_py()),
+    )
+    sx = int(batch.column("shape_x")[i].as_py())
+    sy = int(batch.column("shape_y")[i].as_py())
+    epsg = int(batch.column("proj:epsg")[i].as_py())
+    sa = SpatialAttrs(
+        dimensions=["y", "x"],
+        transform=transform,
+        bbox=(
+            float(transform[2]),
+            float(transform[5] + transform[4] * sy),
+            float(transform[2] + transform[0] * sx),
+            float(transform[5]),
+        ),
+        shape=(sy, sx),
+    )
+    pa = ProjAttrs(code=f"EPSG:{epsg}")
+    return SourceEntry(
+        path=str(batch.column("id")[i].as_py()),
+        spatial_attrs=sa,
+        proj_attrs=pa,
+        chunk_shape=(0, 0),
+    )
+
+
+def _entry_from_conventions(batch: Any, i: int, store: Any) -> SourceEntry:
+    """Build a SourceEntry by reading zarr group conventions for spatial metadata."""
+    item_id = str(batch.column("id")[i].as_py())
+    epsg = int(batch.column("proj:epsg")[i].as_py())
+
+    zarr_store: Any = store
+    if hasattr(store, "prefix") and not isinstance(store, zarr.abc.store.Store):  # type: ignore[attr-defined]
+        zarr_store = store.prefix
+
+    group = zarr.open_group(zarr_store, path=f"/{item_id}", mode="r")
+    sa = read_spatial(group)
+    pa = ProjAttrs(code=f"EPSG:{epsg}")
+    return SourceEntry(
+        path=item_id,
+        spatial_attrs=sa,
+        proj_attrs=pa,
+        chunk_shape=(0, 0),
+    )
+
+
 def query_datafusion_sources(
     store: Any,
     bbox_4326: tuple[float, float, float, float],
@@ -151,6 +211,11 @@ def query_datafusion_sources(
 
     Issues a spatial SQL query against the /meta columnar arrays. Only sources
     whose bbox (stored in EPSG:4326) intersects the query bbox are returned.
+
+    When the DataFusion schema includes ``transform_0..5`` and ``shape_x/y``
+    columns, spatial metadata is read directly from the query results.
+    Otherwise, it falls back to reading zarr group conventions for each
+    matched source.
 
     Args:
         store: An obstore-compatible object store (e.g. LocalStore, S3Store),
@@ -188,13 +253,31 @@ def query_datafusion_sources(
         register_all(ctx)
         ctx.register_table("meta", zarr_table)
 
+        transform_cols = [
+            "transform_0",
+            "transform_1",
+            "transform_2",
+            "transform_3",
+            "transform_4",
+            "transform_5",
+            "shape_x",
+            "shape_y",
+        ]
+        has_transform = _has_columns(ctx, "meta", transform_cols)
+
         xmin, ymin, xmax, ymax = bbox_4326
+        if has_transform:
+            select = (
+                'SELECT id, "proj:epsg", '
+                "transform_0, transform_1, transform_2, "
+                "transform_3, transform_4, transform_5, "
+                "shape_x, shape_y "
+            )
+        else:
+            select = 'SELECT id, "proj:epsg" '
+
         query = (
-            'SELECT id, "proj:epsg", '
-            "transform_0, transform_1, transform_2, "
-            "transform_3, transform_4, transform_5, "
-            "shape_x, shape_y "
-            "FROM meta "
+            select + "FROM meta "
             "WHERE ST_Intersects(bbox, ST_GeomFromText("
             f"'POLYGON(({xmin} {ymin}, {xmax} {ymin}, "
             f"{xmax} {ymax}, {xmin} {ymax}, {xmin} {ymin}))'"
@@ -211,37 +294,10 @@ def query_datafusion_sources(
         entries: list[SourceEntry] = []
         for batch in batches:
             for i in range(batch.num_rows):
-                transform = (
-                    float(batch.column("transform_0")[i].as_py()),
-                    float(batch.column("transform_1")[i].as_py()),
-                    float(batch.column("transform_2")[i].as_py()),
-                    float(batch.column("transform_3")[i].as_py()),
-                    float(batch.column("transform_4")[i].as_py()),
-                    float(batch.column("transform_5")[i].as_py()),
-                )
-                sx = int(batch.column("shape_x")[i].as_py())
-                sy = int(batch.column("shape_y")[i].as_py())
-                epsg = int(batch.column("proj:epsg")[i].as_py())
-                sa = SpatialAttrs(
-                    dimensions=["y", "x"],
-                    transform=transform,
-                    bbox=(
-                        float(transform[2]),
-                        float(transform[5] + transform[4] * sy),
-                        float(transform[2] + transform[0] * sx),
-                        float(transform[5]),
-                    ),
-                    shape=(sy, sx),
-                )
-                pa = ProjAttrs(code=f"EPSG:{epsg}")
-                entries.append(
-                    SourceEntry(
-                        path=str(batch.column("id")[i].as_py()),
-                        spatial_attrs=sa,
-                        proj_attrs=pa,
-                        chunk_shape=(0, 0),
-                    )
-                )
+                if has_transform:
+                    entries.append(_entry_from_columns(batch, i))
+                else:
+                    entries.append(_entry_from_conventions(batch, i, store))
         return entries
 
     result: list[SourceEntry] = _run_async(_query())
