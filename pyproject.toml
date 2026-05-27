@@ -110,3 +110,6 @@ module = [
     "zarr_datafusion_search.*",
 ]
 ignore_missing_imports = true
+
+[tool.setuptools.packages.find]
+include = ["lazymerge*"]
