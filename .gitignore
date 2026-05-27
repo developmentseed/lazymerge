@@ -8,3 +8,9 @@ wheels/
 
 # Virtual environments
 .venv
+
+# mkdocs build output
+site/*
+
+docs/examples/data
+docs/examples/.ipynb_checkpoints
