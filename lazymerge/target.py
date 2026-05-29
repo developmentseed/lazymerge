@@ -46,7 +46,7 @@ def to_zarr(
     store: Any,
     path: str | None = None,
 ) -> None:
-    result = array.compute()
+    result = array.compute()  # type: ignore[no-untyped-call]
     root = zarr.open_group(store, mode="w")
     arr_path = path or "data"
     zarr_arr = root.create_array(arr_path, data=result, chunks=array.chunksize)
