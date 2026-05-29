@@ -107,6 +107,40 @@ print(time_coords)      # array of datetime64[D] values
 Supported period strings: `P1D` (daily), `P1W` (weekly), `P1M` (monthly),
 `P1Y` (yearly), `PnD` (fixed n-day windows), `PnW` (fixed n-week windows).
 
+## Lazy virtualization
+
+When working with COGs that haven't been pre-virtualized into Zarr, use the
+`virtualize` parameter to convert them on-the-fly during compute. The
+`default_virtualizer` factory creates a callback that uses VirtualiZarr to
+write virtual chunk references into an Icechunk store:
+
+```python
+from lazymerge import merge, default_virtualizer
+
+virtualizer = default_virtualizer(registry, overviews=[1, 2, 3])
+
+result, spatial, proj, _ = merge(
+    store=ic_session.store,
+    crs="EPSG:32611",
+    bbox=(200000.0, 4260000.0, 340000.0, 4490000.0),
+    resolution=30.0,
+    bands=["red", "green", "blue"],
+    datafusion=True,
+    sortby="datetime",
+    nodata=0,
+    virtualize=virtualizer,
+)
+
+data = result.compute()  # virtualization happens here, on demand
+```
+
+Virtualization is **lazy** -- nothing happens until `.compute()` is called.
+Each source COG is virtualized exactly once, even when multiple output chunks
+reference the same source. Subsequent runs skip already-virtualized sources.
+
+See the [STAC + VirtualiZarr](../examples/stac_virtualizarr.ipynb) notebook
+for a full end-to-end example.
+
 ## Dry-run with explain
 
 Inspect which source regions would be read without fetching any pixel data:

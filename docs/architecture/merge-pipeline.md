@@ -62,6 +62,27 @@ The target resolution is converted to the source CRS before comparison,
 handling cases where the target and source use different CRS with different
 units.
 
+## Lazy virtualization
+
+When a `virtualize` callback is provided, each source is virtualized into the
+store before its pixel data is read.  This allows COGs (or other non-Zarr
+formats) to be converted to virtual Zarr references on demand, rather than
+requiring an upfront bulk virtualization step.
+
+The built-in `default_virtualizer` factory creates a callback that:
+
+1. Converts HTTPS S3 URLs to `s3://` protocol equivalents.
+2. Uses VirtualiZarr + VirtualTIFF to write virtual chunk references for each
+   band and overview level into the Icechunk store.
+3. Writes Zarr conventions (spatial, proj, multiscales) so that subsequent
+   reads can discover and navigate the virtualized arrays.
+
+Virtualization is coordinated with a per-source futures mechanism: a
+`ThreadPoolExecutor` runs callbacks, and a lock-protected dictionary ensures
+each source is virtualized exactly once.  If multiple chunks reference the
+same source concurrently, only the first triggers the callback -- the rest
+block until it completes.
+
 ## Warp and composite
 
 For each source intersecting a chunk:

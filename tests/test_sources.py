@@ -1,7 +1,7 @@
 import zarr
 
 from lazymerge.conventions import OverviewLevel, ProjAttrs, SpatialAttrs, write_proj, write_spatial
-from lazymerge.sources import scan_store, select_overview
+from lazymerge.sources import SourceEntry, scan_store, select_overview
 
 
 def _make_source_store():
@@ -206,3 +206,36 @@ def test_select_overview_target_between_native_and_finest():
     # Target is 15m, native is 10m, finest overview is 20m — fall back to full res
     result = select_overview(overviews=overviews, target_res=15.0, native_res=10.0)
     assert result is None
+
+
+def test_source_entry_metadata_default_none():
+    entry = SourceEntry(
+        path="test",
+        spatial_attrs=SpatialAttrs(
+            dimensions=["y", "x"],
+            transform=(10.0, 0.0, 0.0, 0.0, -10.0, 100.0),
+            bbox=(0.0, 0.0, 100.0, 100.0),
+            shape=(10, 10),
+        ),
+        proj_attrs=ProjAttrs(code="EPSG:4326"),
+        chunk_shape=(10, 10),
+    )
+    assert entry.metadata is None
+
+
+def test_source_entry_metadata_with_value():
+    meta = {"id": "scene_1", "proj:epsg": 32618, "asset_red": "https://example.com/red.tif"}
+    entry = SourceEntry(
+        path="scene_1",
+        spatial_attrs=SpatialAttrs(
+            dimensions=["y", "x"],
+            transform=(10.0, 0.0, 0.0, 0.0, -10.0, 100.0),
+            bbox=(0.0, 0.0, 100.0, 100.0),
+            shape=(10, 10),
+        ),
+        proj_attrs=ProjAttrs(code="EPSG:32618"),
+        chunk_shape=(10, 10),
+        metadata=meta,
+    )
+    assert entry.metadata == meta
+    assert entry.metadata["asset_red"] == "https://example.com/red.tif"

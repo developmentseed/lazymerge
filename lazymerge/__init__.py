@@ -54,3 +54,4 @@ from lazymerge.temporal import (
 from lazymerge.temporal import (
     grouper_from_period as grouper_from_period,
 )
+from lazymerge.virtualize import default_virtualizer as default_virtualizer

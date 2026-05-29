@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from typing import Any
+import threading
+from concurrent.futures import Future, ThreadPoolExecutor
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 import cubed
 import numpy as np
@@ -25,6 +30,31 @@ from lazymerge.sources import (
 from lazymerge.target import create_target
 from lazymerge.temporal import TemporalGrouper, grouper_from_period
 from lazymerge.warp import _target_to_source_pixels, warp_source_region
+
+_virtualize_futures: dict[str, Future[None]] = {}
+_futures_lock = threading.Lock()
+_virtualize_executor = ThreadPoolExecutor(max_workers=4)
+
+
+def ensure_virtualized(
+    source_id: str,
+    callback: Callable[[str, SourceEntry, Any, list[str]], None],
+    entry: SourceEntry,
+    store: Any,
+    bands: list[str],
+) -> None:
+    """Ensure a source is virtualized exactly once, blocking until complete."""
+    with _futures_lock:
+        if source_id not in _virtualize_futures:
+            _virtualize_futures[source_id] = _virtualize_executor.submit(
+                callback,
+                source_id,
+                entry,
+                store,
+                bands,
+            )
+        fut = _virtualize_futures[source_id]
+    fut.result()
 
 
 def _read_spatial_or_derive(
@@ -120,6 +150,7 @@ def _merge_block(
     sql_filter: str | None = None,
     temporal_grouper: TemporalGrouper | None = None,
     time_groups: list[str] | None = None,
+    virtualize: Callable[[str, SourceEntry, Any, list[str]], None] | None = None,
 ) -> np.ndarray:
     target_crs = target_proj.code
     if target_crs is None:
@@ -203,6 +234,15 @@ def _merge_block(
     for source_entry in sources:
         if unfilled == 0:
             break
+
+        if virtualize is not None:
+            ensure_virtualized(
+                source_id=source_entry.path,
+                callback=virtualize,
+                entry=source_entry,
+                store=store,
+                bands=bands or [],
+            )
 
         src_crs = source_entry.proj_attrs.code or "EPSG:4326"
         root = zarr.open_group(zarr_store, mode="r")
@@ -353,7 +393,72 @@ def merge(
     sql_filter: str | None = None,
     dtype: str = "float32",
     temporal_grouping: str | None = None,
+    virtualize: Callable[[str, SourceEntry, Any, list[str]], None] | None = None,
 ) -> tuple[cubed.Array, SpatialAttrs, ProjAttrs, np.ndarray | None]:
+    """Lazily merge geospatial Zarr arrays into a single target grid.
+
+    Defines a target grid from the given CRS, bounding box, and resolution,
+    then returns a lazy Cubed array.  No data is read until ``.compute()``
+    is called -- at that point only the source regions that intersect each
+    output chunk are fetched, reprojected, and composited.
+
+    Parameters
+    ----------
+    store
+        Zarr-compatible store (e.g. ``LocalStore``, ``S3Store``,
+        ``IcechunkStore``) containing the source arrays.
+    crs
+        Target CRS as an EPSG string (e.g. ``"EPSG:32618"``).
+    bbox
+        Target bounding box ``(xmin, ymin, xmax, ymax)`` in the target CRS.
+    resolution
+        Target pixel size in the target CRS units.
+    chunk_size
+        ``(rows, cols)`` chunk dimensions for the output array.
+    source_index
+        Pre-built in-memory index from ``scan_store()``.  Mutually exclusive
+        with ``datafusion=True``.
+    resampling
+        Resampling method (``"nearest"``).
+    bands
+        Band name(s) to merge.  A single string produces a 2-D ``(y, x)``
+        output; a list produces a 3-D ``(band, y, x)`` output.
+    datafusion
+        If ``True``, discover sources via DataFusion SQL queries against
+        a ``/meta`` group in the store.
+    sortby
+        Column name to sort DataFusion results by (e.g. ``"datetime"``).
+        Controls compositing priority -- earlier entries take precedence.
+    nodata
+        Source nodata value.  Pixels equal to this value are treated as
+        transparent during compositing.
+    sql_filter
+        Additional SQL predicate appended to the DataFusion query
+        (e.g. ``'"eo:cloud_cover" < 20'``).
+    dtype
+        NumPy dtype string for the output array.
+    temporal_grouping
+        ISO 8601 duration string for time-based binning (e.g. ``"P1D"``,
+        ``"P1M"``).  Requires ``datafusion=True``.  Adds a leading time
+        dimension to the output.
+    virtualize
+        Optional callback that virtualizes a source on-the-fly before its
+        data is read.  Called once per source with signature
+        ``(source_id, entry, store, bands)``.  Use
+        :func:`~lazymerge.virtualize.default_virtualizer` to create a
+        callback that converts COGs to virtual Zarr references via
+        VirtualiZarr.
+
+    Returns
+    -------
+    tuple[cubed.Array, SpatialAttrs, ProjAttrs, np.ndarray | None]
+        A tuple of ``(result, spatial_attrs, proj_attrs, time_coords)``
+        where ``result`` is a lazy Cubed array, ``spatial_attrs`` and
+        ``proj_attrs`` describe the target grid, and ``time_coords`` is
+        an array of ``datetime64`` values (or ``None`` if temporal grouping
+        is not used).
+
+    """
     # Normalise bands to a list or None
     if isinstance(bands, str):
         bands_list: list[str] | None = [bands]
@@ -430,7 +535,10 @@ def merge(
         sql_filter=sql_filter,
         temporal_grouper=temporal_grouper,
         time_groups=time_groups,
+        virtualize=virtualize,
     )
+
+    _virtualize_futures.clear()
 
     time_coords: np.ndarray | None = None
     if temporal_grouper is not None and time_groups:

@@ -13,6 +13,7 @@ Inspired by the excellent [lazycogs](https://developmentseed.org/lazycogs/).
 lazycogs provides amazing out of the box support for generating lazy datacubes
 for large collections of COGs using a stac-geoparquet index.  Lazymerge is an experimental library to generalize this concept to arbitrary data sources building on
 recently developed specifications and libraries..
+
  - [Geozarr](https://geozarr.org/) for defining CRS, transform and multiscale
    information for source Zarr arrays.
  - [VirtualiZarr](https://virtualizarr.readthedocs.io/en/stable/index.html) to
@@ -53,6 +54,9 @@ workflows that lazycogs provides can be achieved with Zarr.
   `(band, y, x)` output array.
 - **Temporal grouping** -- bucket source scenes by time period (day, week,
   month, year, or fixed N-day windows) to produce `(time, y, x)` outputs.
+- **Lazy virtualization** -- optionally virtualize COGs on-the-fly during
+  compute via a `virtualize` callback. Only sources that intersect the
+  target grid are processed, and each source is virtualized exactly once.
 - **DataFusion-powered source discovery** -- use SQL queries against metadata
   stored in Zarr (via `zarr-datafusion-search`) for spatial and attribute
   filtering of sources.

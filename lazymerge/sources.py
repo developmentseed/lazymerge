@@ -9,6 +9,7 @@ import zarr
 from datafusion import SessionContext
 from geodatafusion import register_all
 from pyproj import Transformer
+from zarr.errors import GroupNotFoundError
 from zarr_datafusion_search import ZarrTable
 
 from lazymerge.conventions import (
@@ -42,6 +43,7 @@ class SourceEntry:
     spatial_attrs: SpatialAttrs
     proj_attrs: ProjAttrs
     chunk_shape: tuple[int, ...]
+    metadata: dict[str, Any] | None = None
 
 
 def _bboxes_intersect(a: Bbox, b: Bbox) -> bool:
@@ -201,6 +203,40 @@ def _entry_from_conventions(batch: Any, i: int, store: Any) -> SourceEntry:
     )
 
 
+def _entry_from_bbox(row_meta: dict[str, Any]) -> SourceEntry:
+    """Build a SourceEntry from bbox geometry and proj:epsg metadata.
+
+    Used when transform/shape columns are absent and zarr groups may not
+    yet exist (e.g. lazy virtualization).  The bbox in projected coordinates
+    is sufficient for the spatial intersection check; actual transform and
+    shape are resolved later from the virtualized array.
+    """
+    from rasterio.warp import transform_bounds  # noqa: PLC0415
+    from shapely import wkb  # noqa: PLC0415
+
+    item_id = str(row_meta["id"])
+    epsg = int(row_meta["proj:epsg"])
+    proj_code = f"EPSG:{epsg}"
+
+    geom = wkb.loads(row_meta["bbox"])
+    bbox_4326 = geom.bounds  # (minx, miny, maxx, maxy)
+    projected_bbox = transform_bounds("EPSG:4326", proj_code, *bbox_4326)
+
+    sa = SpatialAttrs(
+        dimensions=["y", "x"],
+        transform=(0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
+        bbox=projected_bbox,
+        shape=(0, 0),
+    )
+    pa = ProjAttrs(code=proj_code)
+    return SourceEntry(
+        path=item_id,
+        spatial_attrs=sa,
+        proj_attrs=pa,
+        chunk_shape=(0, 0),
+    )
+
+
 def query_datafusion_sources(
     store: Any,
     bbox_4326: tuple[float, float, float, float],
@@ -266,18 +302,9 @@ def query_datafusion_sources(
         has_transform = _has_columns(ctx, "meta", transform_cols)
 
         xmin, ymin, xmax, ymax = bbox_4326
-        if has_transform:
-            select = (
-                'SELECT id, "proj:epsg", '
-                "transform_0, transform_1, transform_2, "
-                "transform_3, transform_4, transform_5, "
-                "shape_x, shape_y "
-            )
-        else:
-            select = 'SELECT id, "proj:epsg" '
 
         query = (
-            select + "FROM meta "
+            "SELECT * FROM meta "
             "WHERE ST_Intersects(bbox, ST_GeomFromText("
             f"'POLYGON(({xmin} {ymin}, {xmax} {ymin}, "
             f"{xmax} {ymax}, {xmin} {ymax}, {xmin} {ymin}))'"
@@ -289,15 +316,32 @@ def query_datafusion_sources(
             query += f' ORDER BY "{sortby}"'
 
         df = ctx.sql(query)
+        schema = df.schema()
         batches = df.collect()
 
         entries: list[SourceEntry] = []
         for batch in batches:
             for i in range(batch.num_rows):
+                row_meta = {
+                    schema.field(j).name: batch.column(schema.field(j).name)[i].as_py()
+                    for j in range(len(schema))
+                }
                 if has_transform:
-                    entries.append(_entry_from_columns(batch, i))
+                    base = _entry_from_columns(batch, i)
                 else:
-                    entries.append(_entry_from_conventions(batch, i, store))
+                    try:
+                        base = _entry_from_conventions(batch, i, store)
+                    except (KeyError, FileNotFoundError, GroupNotFoundError):
+                        base = _entry_from_bbox(row_meta)
+                entries.append(
+                    SourceEntry(
+                        path=base.path,
+                        spatial_attrs=base.spatial_attrs,
+                        proj_attrs=base.proj_attrs,
+                        chunk_shape=base.chunk_shape,
+                        metadata=row_meta,
+                    )
+                )
         return entries
 
     result: list[SourceEntry] = _run_async(_query())
