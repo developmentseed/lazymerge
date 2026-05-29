@@ -440,6 +440,8 @@
       
         
       
+        
+      
     
     
     
@@ -554,6 +556,34 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label=" merge">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#lazymerge.merge.ensure_virtualized" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;ensure_virtualized
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lazymerge.merge.merge" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;merge
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -678,6 +708,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../virtualize/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    virtualize
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -693,6 +751,8 @@
   
     
     
+      
+        
       
         
       
@@ -811,6 +871,34 @@
     
   
     STAC + VirtualiZarr
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/stac_virtualizarr_sentinel/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STAC + VirtualiZarr (Sentinel-2)
   
 
     
@@ -1009,6 +1097,34 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label=" merge">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#lazymerge.merge.ensure_virtualized" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;ensure_virtualized
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lazymerge.merge.merge" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;merge
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
     </ul>
@@ -1065,6 +1181,290 @@
 
 
 
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="lazymerge.merge.ensure_virtualized" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">ensure_virtualized</span>
+
+
+<a href="#lazymerge.merge.ensure_virtualized" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">ensure_virtualized</span><span class="p">(</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">source_id</span><span class="p">:</span> <span class="n"><span title="str">str</span></span><span class="p">,</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">callback</span><span class="p">:</span> <span class="n"><span title="collections.abc.Callable">Callable</span></span><span class="p">[[</span><span class="n"><span title="str">str</span></span><span class="p">,</span> <span class="n"><a class="autorefs autorefs-internal" title="lazymerge.SourceEntry
+
+
+  
+      dataclass
+   (lazymerge.sources.SourceEntry)" href="../sources/#lazymerge.SourceEntry">SourceEntry</a></span><span class="p">,</span> <span class="n"><span title="typing.Any">Any</span></span><span class="p">,</span> <span class="n"><span title="list">list</span></span><span class="p">[</span><span class="n"><span title="str">str</span></span><span class="p">]],</span> <span class="kc">None</span><span class="p">],</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">entry</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-internal" title="lazymerge.SourceEntry
+
+
+  
+      dataclass
+   (lazymerge.sources.SourceEntry)" href="../sources/#lazymerge.SourceEntry">SourceEntry</a></span><span class="p">,</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">store</span><span class="p">:</span> <span class="n"><span title="typing.Any">Any</span></span><span class="p">,</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">bands</span><span class="p">:</span> <span class="n"><span title="list">list</span></span><span class="p">[</span><span class="n"><span title="str">str</span></span><span class="p">],</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Ensure a source is virtualized exactly once, blocking until complete.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="lazymerge.merge.merge" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">merge</span>
+
+
+<a href="#lazymerge.merge.merge" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">merge</span><span class="p">(</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">store</span><span class="p">:</span> <span class="n"><span title="typing.Any">Any</span></span><span class="p">,</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">crs</span><span class="p">:</span> <span class="n"><span title="str">str</span></span><span class="p">,</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">bbox</span><span class="p">:</span> <span class="n"><span title="tuple">tuple</span></span><span class="p">[</span><span class="n"><span title="float">float</span></span><span class="p">,</span> <span class="n"><span title="float">float</span></span><span class="p">,</span> <span class="n"><span title="float">float</span></span><span class="p">,</span> <span class="n"><span title="float">float</span></span><span class="p">],</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">resolution</span><span class="p">:</span> <span class="n"><span title="float">float</span></span><span class="p">,</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">chunk_size</span><span class="p">:</span> <span class="n"><span title="tuple">tuple</span></span><span class="p">[</span><span class="n"><span title="int">int</span></span><span class="p">,</span> <span class="n"><span title="int">int</span></span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">512</span><span class="p">,</span> <span class="mi">512</span><span class="p">),</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">source_index</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-internal" title="lazymerge.ScanIndex (lazymerge.sources.ScanIndex)" href="../sources/#lazymerge.ScanIndex">ScanIndex</a></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">resampling</span><span class="p">:</span> <span class="n"><span title="str">str</span></span> <span class="o">=</span> <span class="s2">&quot;nearest&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">bands</span><span class="p">:</span> <span class="n"><span title="list">list</span></span><span class="p">[</span><span class="n"><span title="str">str</span></span><span class="p">]</span> <span class="o">|</span> <span class="n"><span title="str">str</span></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">datafusion</span><span class="p">:</span> <span class="n"><span title="bool">bool</span></span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="n">sortby</span><span class="p">:</span> <span class="n"><span title="str">str</span></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="n">nodata</span><span class="p">:</span> <span class="n"><span title="float">float</span></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="n">sql_filter</span><span class="p">:</span> <span class="n"><span title="str">str</span></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="n">dtype</span><span class="p">:</span> <span class="n"><span title="str">str</span></span> <span class="o">=</span> <span class="s2">&quot;float32&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>    <span class="n">temporal_grouping</span><span class="p">:</span> <span class="n"><span title="str">str</span></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>    <span class="n">virtualize</span><span class="p">:</span> <span class="n"><span title="collections.abc.Callable">Callable</span></span><span class="p">[[</span><span class="n"><span title="str">str</span></span><span class="p">,</span> <span class="n"><a class="autorefs autorefs-internal" title="lazymerge.SourceEntry
+
+
+  
+      dataclass
+   (lazymerge.sources.SourceEntry)" href="../sources/#lazymerge.SourceEntry">SourceEntry</a></span><span class="p">,</span> <span class="n"><span title="typing.Any">Any</span></span><span class="p">,</span> <span class="n"><span title="list">list</span></span><span class="p">[</span><span class="n"><span title="str">str</span></span><span class="p">]],</span> <span class="kc">None</span><span class="p">]</span>
+<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>    <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n"><span title="tuple">tuple</span></span><span class="p">[</span><span class="n"><span title="cubed.Array">Array</span></span><span class="p">,</span> <span class="n"><a class="autorefs autorefs-internal" title="lazymerge.SpatialAttrs
+
+
+  
+      dataclass
+   (lazymerge.conventions.SpatialAttrs)" href="../conventions/#lazymerge.SpatialAttrs">SpatialAttrs</a></span><span class="p">,</span> <span class="n"><a class="autorefs autorefs-internal" title="lazymerge.ProjAttrs
+
+
+  
+      dataclass
+   (lazymerge.conventions.ProjAttrs)" href="../conventions/#lazymerge.ProjAttrs">ProjAttrs</a></span><span class="p">,</span> <span class="n"><span title="numpy.ndarray">ndarray</span></span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Lazily merge geospatial Zarr arrays into a single target grid.</p>
+<p>Defines a target grid from the given CRS, bounding box, and resolution,
+then returns a lazy Cubed array.  No data is read until <code>.compute()</code>
+is called -- at that point only the source regions that intersect each
+output chunk are fetched, reprojected, and composited.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+            <b><code>store</code></b>
+              (<code><span title="typing.Any">Any</span></code>)
+          –
+          <div class="doc-md-description">
+            <p>Zarr-compatible store (e.g. <code>LocalStore</code>, <code>S3Store</code>,
+<code>IcechunkStore</code>) containing the source arrays.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>crs</code></b>
+              (<code><span title="str">str</span></code>)
+          –
+          <div class="doc-md-description">
+            <p>Target CRS as an EPSG string (e.g. <code>"EPSG:32618"</code>).</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>bbox</code></b>
+              (<code><span title="tuple">tuple</span>[<span title="float">float</span>, <span title="float">float</span>, <span title="float">float</span>, <span title="float">float</span>]</code>)
+          –
+          <div class="doc-md-description">
+            <p>Target bounding box <code>(xmin, ymin, xmax, ymax)</code> in the target CRS.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>resolution</code></b>
+              (<code><span title="float">float</span></code>)
+          –
+          <div class="doc-md-description">
+            <p>Target pixel size in the target CRS units.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>chunk_size</code></b>
+              (<code><span title="tuple">tuple</span>[<span title="int">int</span>, <span title="int">int</span>]</code>, default:
+                  <code>(512, 512)</code>
+)
+          –
+          <div class="doc-md-description">
+            <p><code>(rows, cols)</code> chunk dimensions for the output array.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>source_index</code></b>
+              (<code><a class="autorefs autorefs-internal" title="lazymerge.ScanIndex (lazymerge.sources.ScanIndex)" href="../sources/#lazymerge.ScanIndex">ScanIndex</a> | None</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Pre-built in-memory index from <code>scan_store()</code>.  Mutually exclusive
+with <code>datafusion=True</code>.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>resampling</code></b>
+              (<code><span title="str">str</span></code>, default:
+                  <code>&#39;nearest&#39;</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Resampling method (<code>"nearest"</code>).</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>bands</code></b>
+              (<code><span title="list">list</span>[<span title="str">str</span>] | <span title="str">str</span> | None</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Band name(s) to merge.  A single string produces a 2-D <code>(y, x)</code>
+output; a list produces a 3-D <code>(band, y, x)</code> output.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>datafusion</code></b>
+              (<code><span title="bool">bool</span></code>, default:
+                  <code>False</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>If <code>True</code>, discover sources via DataFusion SQL queries against
+a <code>/meta</code> group in the store.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>sortby</code></b>
+              (<code><span title="str">str</span> | None</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Column name to sort DataFusion results by (e.g. <code>"datetime"</code>).
+Controls compositing priority -- earlier entries take precedence.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>nodata</code></b>
+              (<code><span title="float">float</span> | None</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Source nodata value.  Pixels equal to this value are treated as
+transparent during compositing.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>sql_filter</code></b>
+              (<code><span title="str">str</span> | None</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Additional SQL predicate appended to the DataFusion query
+(e.g. <code>'"eo:cloud_cover" &lt; 20'</code>).</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>dtype</code></b>
+              (<code><span title="str">str</span></code>, default:
+                  <code>&#39;float32&#39;</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>NumPy dtype string for the output array.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>temporal_grouping</code></b>
+              (<code><span title="str">str</span> | None</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>ISO 8601 duration string for time-based binning (e.g. <code>"P1D"</code>,
+<code>"P1M"</code>).  Requires <code>datafusion=True</code>.  Adds a leading time
+dimension to the output.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>virtualize</code></b>
+              (<code><span title="collections.abc.Callable">Callable</span>[[<span title="str">str</span>, <a class="autorefs autorefs-internal" title="lazymerge.SourceEntry
+
+
+  
+      dataclass
+   (lazymerge.sources.SourceEntry)" href="../sources/#lazymerge.SourceEntry">SourceEntry</a>, <span title="typing.Any">Any</span>, <span title="list">list</span>[<span title="str">str</span>]], None] | None</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Optional callback that virtualizes a source on-the-fly before its
+data is read.  Called once per source with signature
+<code>(source_id, entry, store, bands)</code>.  Use
+:func:<code>~lazymerge.virtualize.default_virtualizer</code> to create a
+callback that converts COGs to virtual Zarr references via
+VirtualiZarr.</p>
+          </div>
+        </li>
+    </ul>
+
+
+<p><span class="doc-section-title">Returns:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+              <code><span title="tuple">tuple</span>[<span title="cubed.Array">Array</span>, <a class="autorefs autorefs-internal" title="lazymerge.SpatialAttrs
+
+
+  
+      dataclass
+   (lazymerge.conventions.SpatialAttrs)" href="../conventions/#lazymerge.SpatialAttrs">SpatialAttrs</a>, <a class="autorefs autorefs-internal" title="lazymerge.ProjAttrs
+
+
+  
+      dataclass
+   (lazymerge.conventions.ProjAttrs)" href="../conventions/#lazymerge.ProjAttrs">ProjAttrs</a>, <span title="numpy.ndarray">ndarray</span> | None]</code>
+          –
+          <div class="doc-md-description">
+            <p>A tuple of <code>(result, spatial_attrs, proj_attrs, time_coords)</code>
+where <code>result</code> is a lazy Cubed array, <code>spatial_attrs</code> and
+<code>proj_attrs</code> describe the target grid, and <code>time_coords</code> is
+an array of <code>datetime64</code> values (or <code>None</code> if temporal grouping
+is not used).</p>
+          </div>
+        </li>
+    </ul>
+
+
+    </div>
+
+</div>
 
 
 

@@ -2,62 +2,66 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://developmentseed.github.io/lazymerge/</loc>
-         <lastmod>2026-05-27</lastmod>
+         <lastmod>2026-05-29</lastmod>
     </url>
     <url>
          <loc>https://developmentseed.github.io/lazymerge/DEVELOP/</loc>
-         <lastmod>2026-05-27</lastmod>
+         <lastmod>2026-05-29</lastmod>
     </url>
     <url>
          <loc>https://developmentseed.github.io/lazymerge/api/conventions/</loc>
-         <lastmod>2026-05-27</lastmod>
+         <lastmod>2026-05-29</lastmod>
     </url>
     <url>
          <loc>https://developmentseed.github.io/lazymerge/api/explain/</loc>
-         <lastmod>2026-05-27</lastmod>
+         <lastmod>2026-05-29</lastmod>
     </url>
     <url>
          <loc>https://developmentseed.github.io/lazymerge/api/merge/</loc>
-         <lastmod>2026-05-27</lastmod>
+         <lastmod>2026-05-29</lastmod>
     </url>
     <url>
          <loc>https://developmentseed.github.io/lazymerge/api/sources/</loc>
-         <lastmod>2026-05-27</lastmod>
+         <lastmod>2026-05-29</lastmod>
     </url>
     <url>
          <loc>https://developmentseed.github.io/lazymerge/api/temporal/</loc>
-         <lastmod>2026-05-27</lastmod>
+         <lastmod>2026-05-29</lastmod>
+    </url>
+    <url>
+         <loc>https://developmentseed.github.io/lazymerge/api/virtualize/</loc>
+         <lastmod>2026-05-29</lastmod>
     </url>
     <url>
          <loc>https://developmentseed.github.io/lazymerge/architecture/conventions/</loc>
-         <lastmod>2026-05-27</lastmod>
+         <lastmod>2026-05-29</lastmod>
     </url>
     <url>
          <loc>https://developmentseed.github.io/lazymerge/architecture/merge-pipeline/</loc>
-         <lastmod>2026-05-27</lastmod>
+         <lastmod>2026-05-29</lastmod>
     </url>
     <url>
          <loc>https://developmentseed.github.io/lazymerge/examples/conventions/</loc>
-         <lastmod>2026-05-27</lastmod>
+         <lastmod>2026-05-29</lastmod>
     </url>
     <url>
          <loc>https://developmentseed.github.io/lazymerge/examples/datafusion/</loc>
-         <lastmod>2026-05-27</lastmod>
+         <lastmod>2026-05-29</lastmod>
     </url>
     <url>
          <loc>https://developmentseed.github.io/lazymerge/examples/stac_virtualizarr/</loc>
-         <lastmod>2026-05-27</lastmod>
+         <lastmod>2026-05-29</lastmod>
     </url>
     <url>
          <loc>https://developmentseed.github.io/lazymerge/examples/stac_virtualizarr_sentinel/</loc>
-         <lastmod>2026-05-27</lastmod>
+         <lastmod>2026-05-29</lastmod>
     </url>
     <url>
          <loc>https://developmentseed.github.io/lazymerge/user-guide/installation/</loc>
-         <lastmod>2026-05-27</lastmod>
+         <lastmod>2026-05-29</lastmod>
     </url>
     <url>
          <loc>https://developmentseed.github.io/lazymerge/user-guide/quickstart/</loc>
-         <lastmod>2026-05-27</lastmod>
+         <lastmod>2026-05-29</lastmod>
     </url>
 </urlset>

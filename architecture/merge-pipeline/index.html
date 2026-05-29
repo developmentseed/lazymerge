@@ -15,7 +15,7 @@
         <link rel="canonical" href="https://developmentseed.github.io/lazymerge/architecture/merge-pipeline/">
       
       
-        <link rel="prev" href="../../examples/stac_virtualizarr/">
+        <link rel="prev" href="../../examples/stac_virtualizarr_sentinel/">
       
       
         <link rel="next" href="../conventions/">
@@ -438,6 +438,8 @@
       
         
       
+        
+      
     
     
     
@@ -618,6 +620,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/virtualize/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    virtualize
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -633,6 +663,8 @@
   
     
     
+      
+        
       
         
       
@@ -751,6 +783,34 @@
     
   
     STAC + VirtualiZarr
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/stac_virtualizarr_sentinel/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STAC + VirtualiZarr (Sentinel-2)
   
 
     
@@ -937,6 +997,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#lazy-virtualization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lazy virtualization
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#warp-and-composite" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1100,6 +1171,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#lazy-virtualization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lazy virtualization
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#warp-and-composite" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1190,6 +1272,24 @@ reading full-resolution data when the output is at a coarser scale.</p>
 <p>The target resolution is converted to the source CRS before comparison,
 handling cases where the target and source use different CRS with different
 units.</p>
+<h2 id="lazy-virtualization">Lazy virtualization<a class="headerlink" href="#lazy-virtualization" title="Permanent link">&para;</a></h2>
+<p>When a <code>virtualize</code> callback is provided, each source is virtualized into the
+store before its pixel data is read.  This allows COGs (or other non-Zarr
+formats) to be converted to virtual Zarr references on demand, rather than
+requiring an upfront bulk virtualization step.</p>
+<p>The built-in <code>default_virtualizer</code> factory creates a callback that:</p>
+<ol>
+<li>Converts HTTPS S3 URLs to <code>s3://</code> protocol equivalents.</li>
+<li>Uses VirtualiZarr + VirtualTIFF to write virtual chunk references for each
+   band and overview level into the Icechunk store.</li>
+<li>Writes Zarr conventions (spatial, proj, multiscales) so that subsequent
+   reads can discover and navigate the virtualized arrays.</li>
+</ol>
+<p>Virtualization is coordinated with a per-source futures mechanism: a
+<code>ThreadPoolExecutor</code> runs callbacks, and a lock-protected dictionary ensures
+each source is virtualized exactly once.  If multiple chunks reference the
+same source concurrently, only the first triggers the callback -- the rest
+block until it completes.</p>
 <h2 id="warp-and-composite">Warp and composite<a class="headerlink" href="#warp-and-composite" title="Permanent link">&para;</a></h2>
 <p>For each source intersecting a chunk:</p>
 <ol>
