@@ -107,6 +107,10 @@ module = [
     "cubed.*",
     "icechunk.*",
     "nest_asyncio",
+    "rasterio.*",
+    "shapely.*",
+    "virtual_tiff.*",
+    "virtualizarr.*",
     "zarr_datafusion_search.*",
 ]
 ignore_missing_imports = true

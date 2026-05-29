@@ -27,10 +27,12 @@ nav:
       - api/sources.md
       - api/conventions.md
       - api/temporal.md
+      - api/virtualize.md
   - Examples:
       - examples/conventions.ipynb
       - examples/datafusion.ipynb
       - examples/stac_virtualizarr.ipynb
+      - examples/stac_virtualizarr_sentinel.ipynb
   - Architecture:
       - architecture/merge-pipeline.md
       - architecture/conventions.md
