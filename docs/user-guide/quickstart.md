@@ -117,7 +117,7 @@ write virtual chunk references into an Icechunk store:
 ```python
 from lazymerge import merge, default_virtualizer
 
-virtualizer = default_virtualizer(registry, overviews=[1, 2, 3])
+virtualizer = default_virtualizer(registry, target_resolution=30.0)
 
 result, spatial, proj, _ = merge(
     store=ic_session.store,
